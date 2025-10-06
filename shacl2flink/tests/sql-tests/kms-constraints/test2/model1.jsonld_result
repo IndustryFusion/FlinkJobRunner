@@ -1,0 +1,3 @@
+'urn:plasmacutter:1','CountConstraintComponent(https://industry-fusion.com/types/v0.9/hasFilter)','warning'
+'urn:plasmacutter:1','SPARQLConstraintComponent(StateOnCutterShape)','ok'
+'urn:plasmacutter:1','SPARQLConstraintComponent(StateValueShape)','ok'

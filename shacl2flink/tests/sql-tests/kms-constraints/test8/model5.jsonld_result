@@ -1,0 +1,6 @@
+'urn:cutter:1','SPARQLConstraintComponent(StateValueShape)','ok'
+'urn:filter:1','SPARQLConstraintComponent(FilterStrengthShape)','ok'
+'urn:filter:1','SPARQLConstraintComponent(StateOnFilterShape)','major'
+'urn:filter:1','SPARQLConstraintComponent(StateValueShape)','ok'
+'urn:plasmacutter:1','SPARQLConstraintComponent(StateOnCutterShape)','ok'
+'urn:plasmacutter:1','SPARQLConstraintComponent(StateValueShape)','ok'

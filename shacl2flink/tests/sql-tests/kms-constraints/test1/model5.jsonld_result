@@ -1,0 +1,3 @@
+'urn:filterCartridge:1','DatatypeConstraintComponent(https://industry-fusion.com/types/v0.9/wasteClass[0])','warning'
+'urn:filterCartridge:1','NodeKindConstraintComponent(https://industry-fusion.com/types/v0.9/wasteClass[0])','warning'
+'urn:workpiece:1','MaxInclusiveConstraintComponent(https://schema.org/depth[0])','warning'

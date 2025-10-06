@@ -1,0 +1,7 @@
+'urn:filter:1','ClassConstraintComponent(https://industry-fusion.com/types/v0.9/hasCartridge[0])','warning'
+'urn:filter:1','SPARQLConstraintComponent(FilterStrengthShape)','warning'
+'urn:filter:1','SPARQLConstraintComponent(StateOnFilterShape)','ok'
+'urn:filter:1','SPARQLConstraintComponent(StateValueShape)','ok'
+'urn:plasmacutter:1','SPARQLConstraintComponent(StateOnCutterShape)','ok'
+'urn:plasmacutter:1','SPARQLConstraintComponent(StateValueShape)','ok'
+'urn:workpiece:1','MaxInclusiveConstraintComponent(https://schema.org/depth[0])','warning'

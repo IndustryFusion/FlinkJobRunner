@@ -1,0 +1,4 @@
+'urn:lasercutter:1','ClassConstraintComponent(https://industry-fusion.com/types/v0.9/hasFilter[0])','warning'
+'urn:oee:1','SPARQLConstraintComponent(ScheduleTimeValidation)','ok'
+'urn:plasmacutter:1','ClassConstraintComponent(https://industry-fusion.com/types/v0.9/hasFilter[0])','warning'
+'urn:workpiece:1','CountConstraintComponent(https://industry-fusion.com/types/v0.9/qualityCheck)','warning'
