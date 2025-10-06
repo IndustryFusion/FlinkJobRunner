@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  flink-job-runner:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - UPLOAD_DIR=/tmp/digitaltwin
+      - KUBECONFIG_PATH=/root/.kube/config
+    volumes:
+      # Mount kubeconfig for kubernetes access
+      - ${HOME}/.kube/config:/root/.kube/config:ro
+      # Mount upload directory
+      - ./uploads:/tmp/digitaltwin
+    restart: unless-stopped

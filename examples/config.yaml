@@ -1,0 +1,8 @@
+# Example configuration file
+project:
+  name: "FlinkJobRunner Test"
+  version: "1.0.0"
+
+settings:
+  log_level: "INFO"
+  timeout: 300
