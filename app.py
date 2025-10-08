@@ -9,7 +9,8 @@ from pathlib import Path
 from typing import Dict, Optional
 from flask import Flask, request, jsonify, Response, abort
 import requests
-
+from alerts_shacl import bp as alerts_shacl_bp
+    
 # ========= Config =========
 RUNNER_BIND = os.getenv("RUNNER_BIND", "0.0.0.0")
 RUNNER_PORT = int(os.getenv("RUNNER_PORT", "8080"))
@@ -18,8 +19,8 @@ RUNNER_PORT = int(os.getenv("RUNNER_PORT", "8080"))
 DIGITALTWIN_ROOT = Path(os.getenv("DIGITALTWIN_ROOT", "/opt/digitaltwin")).resolve()
 
 # Where per-job working dirs live (logs, inputs, temp)
-WORK_ROOT = Path(os.getenv("WORK_ROOT", "/work")).resolve()
-
+WORK_ROOT = Path(os.getenv("WORK_ROOT", "./work")).resolve()
+print(f"WORK_ROOT is set to: {WORK_ROOT}")
 # Path to kubeconfig file mounted as secret or volume
 KUBECONFIG_PATH = Path(os.getenv("KUBECONFIG_PATH", "/secrets/kubeconfig")).resolve()
 
@@ -32,6 +33,7 @@ TOOL_INPUT_SUBDIR = os.getenv("TOOL_INPUT_SUBDIR", "input")
 
 # ======== State ========
 app = Flask(__name__)
+app.register_blueprint(alerts_shacl_bp)
 
 class JobState:
     def __init__(self, job_id: str):
@@ -42,7 +44,7 @@ class JobState:
         self.proc: Optional[subprocess.Popen] = None
         self.log_path: Path = WORK_ROOT / job_id / "runner.log"
         self.work_dir: Path = WORK_ROOT / job_id
-        self.tool_dir: Path = self.work_dir / "project"  # copy/symlink repo here
+        self.tool_dir: Path = self.work_dir / "shacl2flink"  # copy/symlink repo here
         self.input_dir: Path = self.tool_dir / TOOL_INPUT_SUBDIR
         self.last_error: Optional[str] = None
         self._log_q: "queue.Queue[str]" = queue.Queue()
