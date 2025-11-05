@@ -1,0 +1,507 @@
+
+
+
+
+            INSERT OR REPlACE INTO constraint_trigger_table
+            WITH A1 as (
+                    SELECT /*+ STATE_TTL('D' = '0d') */ A.id AS this,
+                        A.`type` as typ,
+                        IFNULL(A.`deleted`, false) as edeleted,
+                        C.`type` AS entity,
+                        COALESCE(E.`type`, B.`type`) AS link,
+                        COALESCE(E.`nodeType`, B.`nodeType`) as nodeType,
+                        COALESCE(E.`deleted`, B.`deleted`) as `adeleted`,
+                        COALESCE(E.`datasetId`, B.`datasetId`) as `index`,
+                        D.targetClass as targetClass,
+                        COALESCE(D.subpropertyPath, D.propertyPath) as propertyPath,
+                        CASE WHEN D.subpropertyPath IS NULL THEN '' ELSE D.propertyPath || '[' || CASE WHEN B.`datasetId` = '@none' THEN '0' ELSE B.`datasetId` END || '] ==> ' END as parentPath,
+                        COALESCE(D.subpropertyPath, D.propertyPath) || '[' || CASE WHEN  COALESCE(E.`datasetId`, B.`datasetId`) = '@none' THEN '0' ELSE  COALESCE(E.`datasetId`, B.`datasetId`) END || ']' as printPath,
+                        D.propertyClass as propertyClass,
+                        D.attributeType as attributeType,
+                        D.maxCount as maxCount,
+                        D.minCount as minCount,
+                        D.severity as severity,
+                        D.id as constraint_id
+                    FROM entities_view AS A JOIN constraint_table as D ON A.`type` = D.targetClass
+                    LEFT JOIN attributes_view AS B ON B.name = D.propertyPath and B.entityId = A.id and B.parentId IS NULL and COALESCE(B.`deleted`, false) = false
+                    LEFT JOIN attributes_view AS E ON E.name = D.subpropertyPath and E.entityId = A.id and E.parentId = B.id and COALESCE(E.`deleted`, false) = false
+                    LEFT JOIN entities_view AS C ON COALESCE(E.`attributeValue`, B.`attributeValue`) = C.id and COALESCE(C.`deleted`, false) = false
+                    WHERE (D.subpropertyPath IS NULL or E.id is not NULL) and D.attributeType = 'https://uri.etsi.org/ngsi-ld/Relationship'
+            )
+            
+            SELECT this AS resource,
+                'ClassConstraintComponent(' || `parentPath` || `printPath` || ')' AS event,
+                `constraint_id` as constraint_id,
+                true as triggered,
+                `severity` AS severity,
+                'Model validation for relationship' || `propertyPath` || 'failed for '|| this || '. Relationship not linked to existing entity of type ' ||  `propertyClass` || '.'
+                    as `text`
+                ,CURRENT_TIMESTAMP
+            FROM A1 WHERE A1.propertyClass IS NOT NULL and `index` IS NOT NULL and 
+            NOT edeleted AND NOT IFNULL(adeleted, false) AND link IS NOT NULL AND entity IS NULL
+            
+UNION ALL
+            
+            SELECT this AS resource,
+                'CountConstraintComponent(' || `parentPath` || `propertyPath` || ')' AS event,
+                `constraint_id` as constraint_id,
+                true as triggered,
+                `severity` AS severity,
+               'Model validation for relationship ' || `propertyPath` || 'failed for ' || this || ' . Found ' ||
+                            CAST(SUM(CASE WHEN NOT COALESCE(adeleted, FALSE) AND link IS NOT NULL THEN 1 ELSE 0 END) AS STRING) || ' relationships instead of [' || `minCount` || ', ' || `maxCount` || ']!'
+                    as `text`
+                ,CURRENT_TIMESTAMP
+            FROM A1 WHERE `minCount` is NOT NULL or `maxCount` is NOT NULL
+            GROUP BY this, edeleted, propertyPath, maxCount, minCount, severity, constraint_id, parentPath
+            HAVING 
+            NOT edeleted AND (SUM(CASE WHEN NOT COALESCE(adeleted, FALSE) AND link IS NOT NULL THEN 1 ELSE 0 END) > CAST(`maxCount` AS INTEGER)
+                                            OR SUM(CASE WHEN NOT COALESCE(adeleted, FALSE) AND link IS NOT NULL THEN 1 ELSE 0 END) < CAST(`minCount` AS INTEGER))
+            
+UNION ALL
+            
+            SELECT this AS resource,
+                'NodeKindConstraintComponent(' || `parentPath` || `printPath` || ')' AS event,
+                `constraint_id` as constraint_id,
+                true as triggered,
+                `severity` AS severity,
+                'Model validation for relationship ' || `propertyPath` || ' failed for ' || this || ' . Either NodeType '|| nodeType || ' is not an IRI or type is not a Relationship.'
+                    as `text`
+                ,CURRENT_TIMESTAMP
+            FROM A1 WHERE `index` IS NOT NULL AND 
+            NOT edeleted AND NOT IFNULL(`adeleted`, false) AND (nodeType <> '@id'  OR link <> attributeType)
+            ;
+
+INSERT  OR REPlACE INTO constraint_trigger_table
+WITH A1 AS (SELECT /*+ STATE_TTL('D' = '0d', 'C' = '0d') */ A.id as this,
+                   A.`type` as typ,
+                   IFNULL(A.`deleted`, false) as edeleted,
+                   COALESCE(E.`attributeValue` ,B.`attributeValue`) as val,
+                   COALESCE(E.`nodeType`, B.`nodeType`) as nodeType,
+                   COALESCE(E.`type`, B.`type`) as attr_typ,
+                   COALESCE(E.`deleted`, B.`deleted`) as `adeleted`,
+                   COALESCE(E.`valueType`, B.`valueType`) as `valueType`,
+                   C.subject as foundVal,
+                   C.object as foundClass,
+                   COALESCE(E.`datasetId`, B.`datasetId`) as `index`,
+                   COALESCE(D.subpropertyPath, D.propertyPath) as propertyPath,
+                   CASE WHEN D.subpropertyPath IS NULL THEN '' ELSE D.propertyPath || '[' || CASE WHEN B.`datasetId` = '@none' THEN '0' ELSE B.`datasetId` END || '] ==> ' END as parentPath,
+                   COALESCE(D.subpropertyPath, D.propertyPath) || '[' || CASE WHEN  COALESCE(E.`datasetId`, B.`datasetId`) = '@none' THEN '0' ELSE  COALESCE(E.`datasetId`, B.`datasetId`) END || ']' as printPath,
+                   D.propertyClass as propertyClass,
+                   IFNULL(D.propertyNodetype, 'null') as propertyNodetype,
+                   D.attributeType as attributeType,
+                   D.maxCount as maxCount,
+                   D.minCount as minCount,
+                   D.severity as severity,
+                   D.minExclusive as minExclusive,
+                   D.maxExclusive as maxExclusive,
+                   D.minInclusive as minInclusive,
+                   D.maxInclusive as maxInclusive,
+                   D.minLength as minLength,
+                   D.maxLength as maxLength,
+                   D.`pattern` as `pattern`,
+                   D.ins as ins,
+                   D.datatypes as datatypes,
+                   D.hasValue as hasValue,
+                   D.id as constraint_id
+                   FROM `entities_view` AS A JOIN constraint_table as D ON A.`type` = D.targetClass
+            LEFT JOIN attributes_view AS B ON D.propertyPath = B.name and B.entityId = A.id and B.parentId IS NULL
+             LEFT JOIN attributes_view AS E ON D.subpropertyPath = E.name and E.entityId = A.id and B.id = E.parentId
+            LEFT JOIN rdf as C ON C.subject = '<' || COALESCE(E.attributeValue, B.attributeValue) || '>'
+                and C.predicate = '<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>' and C.object = '<' || D.propertyClass || '>'
+             WHERE (D.subpropertyPath IS NULL or E.id is not NULL) and attributeType IN ('https://uri.etsi.org/ngsi-ld/Property', 'https://uri.etsi.org/ngsi-ld/ListProperty', 'https://uri.etsi.org/ngsi-ld/JsonProperty')
+            )
+
+SELECT this AS resource,
+    'NodeKindConstraintComponent(' || `parentPath` || `printPath` || ')' AS event,
+    `constraint_id` as constraint_id,
+    true as triggered,
+    `severity` AS severity,
+    'Model validation for Property ' || `propertyPath` || ' failed for ' || this || '. Node is not ' ||
+            'of nodetype "' || `nodeType` || '" or not of attribute type "' || attributeType || '"'
+        as `text`
+        
+        ,CURRENT_TIMESTAMP
+        
+FROM A1 WHERE propertyNodetype IS NOT NULL and `index` IS NOT NULL AND 
+NOT edeleted AND NOT IFNULL(adeleted, false) AND (nodeType <> `propertyNodetype` OR attr_typ <> attributeType)
+
+UNION ALL
+
+
+SELECT this AS resource,
+    'DatatypeConstraintComponent(' || `parentPath` || `printPath` || ')' AS event,
+    `constraint_id` as constraint_id,
+    true as triggered,
+    `severity` AS severity,
+    'Model validation for Property ' || `propertyPath` || ' failed for ' || this || '. Invalid value ' || IFNULL(val, 'NULL')  || ' not type of ' || `propertyClass` || '.'
+        as `text`
+        
+        ,CURRENT_TIMESTAMP
+        
+FROM A1  WHERE propertyNodetype = '@id' and propertyClass IS NOT NULL and `index` IS NOT NULL AND 
+NOT edeleted AND attr_typ IS NOT NULL AND NOT IFNULL(adeleted, false) AND (val is NULL OR foundVal is NULL)
+
+UNION ALL
+
+
+SELECT this AS resource,
+ 'MinExclusiveConstraintComponent(' || `parentPath` || `printPath` || ')' AS event,
+    `constraint_id` as constraint_id,
+    true as triggered,
+    `severity` AS severity,
+    CASE WHEN 
+NOT edeleted AND NOT IFNULL(adeleted, false) AND attr_typ IS NOT NULL AND (CAST(val AS DOUBLE) is NULL or NOT (CAST(val as DOUBLE) > CAST(`minExclusive` AS DOUBLE)) )
+
+        THEN 'Model validation for Property ' || `propertyPath` || ' failed for ' || this || '. Value ' || IFNULL(val, 'NULL') || ' not comparable with ' || `minExclusive` || '.'
+        WHEN 
+typ IS NOT NULL AND attr_typ IS NOT NULL AND NOT (CAST(val as DOUBLE) > CAST( `minExclusive` as DOUBLE) )
+
+        THEN 'Model validation for Property ' || `propertyPath` || ' failed for ' || this || '. Value ' || IFNULL(val, 'NULL') || ' is not > ' || `minExclusive` || '.'
+        END as `text`
+        
+        ,CURRENT_TIMESTAMP
+        
+FROM A1 where `minExclusive` IS NOT NULL and `index` IS NOT NULL AND (
+NOT edeleted AND NOT IFNULL(adeleted, false) AND attr_typ IS NOT NULL AND (CAST(val AS DOUBLE) is NULL or NOT (CAST(val as DOUBLE) > CAST(`minExclusive` AS DOUBLE)) )
+ OR 
+typ IS NOT NULL AND attr_typ IS NOT NULL AND NOT (CAST(val as DOUBLE) > CAST( `minExclusive` as DOUBLE) )
+)
+UNION ALL
+
+
+SELECT this AS resource,
+ 'MaxExclusiveConstraintComponent(' || `parentPath` || `printPath` || ')' AS event,
+    `constraint_id` as constraint_id,
+    true as triggered,
+    `severity` AS severity,
+    CASE WHEN 
+NOT edeleted AND NOT IFNULL(adeleted, false) AND attr_typ IS NOT NULL AND (CAST(val AS DOUBLE) is NULL or NOT (CAST(val as DOUBLE) < CAST(`maxExclusive` AS DOUBLE)) )
+
+        THEN 'Model validation for Property ' || `propertyPath` || ' failed for ' || this || '. Value ' || IFNULL(val, 'NULL') || ' not comparable with ' || `maxExclusive` || '.'
+        WHEN 
+typ IS NOT NULL AND attr_typ IS NOT NULL AND NOT (CAST(val as DOUBLE) < CAST( `maxExclusive` as DOUBLE) )
+
+        THEN 'Model validation for Property ' || `propertyPath` || ' failed for ' || this || '. Value ' || IFNULL(val, 'NULL') || ' is not < ' || `maxExclusive` || '.'
+        END as `text`
+        
+        ,CURRENT_TIMESTAMP
+        
+FROM A1 where `maxExclusive` IS NOT NULL and `index` IS NOT NULL AND (
+NOT edeleted AND NOT IFNULL(adeleted, false) AND attr_typ IS NOT NULL AND (CAST(val AS DOUBLE) is NULL or NOT (CAST(val as DOUBLE) < CAST(`maxExclusive` AS DOUBLE)) )
+ OR 
+typ IS NOT NULL AND attr_typ IS NOT NULL AND NOT (CAST(val as DOUBLE) < CAST( `maxExclusive` as DOUBLE) )
+)
+UNION ALL
+
+
+SELECT this AS resource,
+ 'MaxInclusiveConstraintComponent(' || `parentPath` || `printPath` || ')' AS event,
+    `constraint_id` as constraint_id,
+    true as triggered,
+    `severity` AS severity,
+    CASE WHEN 
+NOT edeleted AND NOT IFNULL(adeleted, false) AND attr_typ IS NOT NULL AND (CAST(val AS DOUBLE) is NULL or NOT (CAST(val as DOUBLE) <= CAST(`maxInclusive` AS DOUBLE)) )
+
+        THEN 'Model validation for Property ' || `propertyPath` || ' failed for ' || this || '. Value ' || IFNULL(val, 'NULL') || ' not comparable with ' || `maxInclusive` || '.'
+        WHEN 
+typ IS NOT NULL AND attr_typ IS NOT NULL AND NOT (CAST(val as DOUBLE) <= CAST( `maxInclusive` as DOUBLE) )
+
+        THEN 'Model validation for Property ' || `propertyPath` || ' failed for ' || this || '. Value ' || IFNULL(val, 'NULL') || ' is not <= ' || `maxInclusive` || '.'
+        END as `text`
+        
+        ,CURRENT_TIMESTAMP
+        
+FROM A1 where `maxInclusive` IS NOT NULL and `index` IS NOT NULL AND (
+NOT edeleted AND NOT IFNULL(adeleted, false) AND attr_typ IS NOT NULL AND (CAST(val AS DOUBLE) is NULL or NOT (CAST(val as DOUBLE) <= CAST(`maxInclusive` AS DOUBLE)) )
+ OR 
+typ IS NOT NULL AND attr_typ IS NOT NULL AND NOT (CAST(val as DOUBLE) <= CAST( `maxInclusive` as DOUBLE) )
+)
+UNION ALL
+
+
+SELECT this AS resource,
+ 'MinInclusiveConstraintComponent(' || `parentPath` || `printPath` || ')' AS event,
+    `constraint_id` as constraint_id,
+    true as triggered,
+    `severity` AS severity,
+    CASE WHEN 
+NOT edeleted AND NOT IFNULL(adeleted, false) AND attr_typ IS NOT NULL AND (CAST(val AS DOUBLE) is NULL or NOT (CAST(val as DOUBLE) >= CAST(`minInclusive` AS DOUBLE)) )
+
+        THEN 'Model validation for Property ' || `propertyPath` || ' failed for ' || this || '. Value ' || IFNULL(val, 'NULL') || ' not comparable with ' || `minInclusive` || '.'
+        WHEN 
+typ IS NOT NULL AND attr_typ IS NOT NULL AND NOT (CAST(val as DOUBLE) >= CAST( `minInclusive` as DOUBLE) )
+
+        THEN 'Model validation for Property ' || `propertyPath` || ' failed for ' || this || '. Value ' || IFNULL(val, 'NULL') || ' is not >= ' || `minInclusive` || '.'
+        END as `text`
+        
+        ,CURRENT_TIMESTAMP
+        
+FROM A1 where `minInclusive` IS NOT NULL and `index` IS NOT NULL AND (
+NOT edeleted AND NOT IFNULL(adeleted, false) AND attr_typ IS NOT NULL AND (CAST(val AS DOUBLE) is NULL or NOT (CAST(val as DOUBLE) >= CAST(`minInclusive` AS DOUBLE)) )
+ OR 
+typ IS NOT NULL AND attr_typ IS NOT NULL AND NOT (CAST(val as DOUBLE) >= CAST( `minInclusive` as DOUBLE) )
+)
+UNION ALL
+
+SELECT this AS resource,
+ 'InConstraintComponent(' || `parentPath` || `printPath` || ')' AS event,
+    `constraint_id` as constraint_id,
+    true as triggered,
+    `severity` AS severity,
+    'Model validation for Property propertyPath failed for ' || this || '. Value ' || IFNULL(val, 'NULL') || ' is not allowed.'
+        as `text`
+        
+        ,CURRENT_TIMESTAMP
+        
+FROM A1 where `ins` IS NOT NULL and `index` IS NOT NULL AND 
+NOT edeleted AND NOT IFNULL(adeleted, false) AND attr_typ IS NOT NULL AND NOT ',' || `ins` || ',' LIKE '%,"' || replace(val, '"', '\"') || '",%'
+
+UNION ALL
+
+SELECT this AS resource,
+ 'PatternConstraintComponent(' || `parentPath` || `printPath` || ')' AS event,
+    `constraint_id` as constraint_id,
+    true as triggered,
+    `severity` AS severity,
+    'Model validation for Property ' || `propertyPath` || ' failed for ' || this || '. Value ' || IFNULL(val, 'NULL') || ' does not match pattern ' || `pattern`
+         as `text`
+        
+        ,CURRENT_TIMESTAMP
+        
+FROM A1 WHERE `pattern` IS NOT NULL and `index` IS NOT NULL AND 
+NOT edeleted AND NOT IFNULL(adeleted, false) AND attr_typ IS NOT NULL AND NOT (val REGEXP `pattern`)
+
+UNION ALL
+
+SELECT this AS resource,
+    'CountConstraintComponent(' || `parentPath` || `propertyPath` || ')' AS event,
+    `constraint_id` as constraint_id,
+    true as triggered,
+    `severity` AS severity,
+   'Model validation for Property ' || `propertyPath` || ' failed for ' || this || '.  Found ' ||
+                            CAST(SUM(DISTINCT CASE WHEN NOT COALESCE(adeleted, FALSE) and attr_typ IS NOT NULL THEN 1 ELSE 0 END) AS STRING) || ' relationships instead of [' || IFNULL('[' || `minCount`, '0')
+                            || ', ' || IFNULL(`maxCount` || ']', '[') || '!'
+        as `text`
+        
+        ,CURRENT_TIMESTAMP
+        
+FROM A1  WHERE `minCount` is NOT NULL or `maxCount` is NOT NULL
+GROUP BY this, typ, propertyPath, minCount, maxCount, severity, edeleted, constraint_id, parentPath
+HAVING 
+    NOT edeleted AND (SUM(DISTINCT CASE WHEN NOT COALESCE(adeleted, FALSE) and attr_typ IS NOT NULL THEN 1 ELSE 0 END) > CAST(`maxCount` AS INTEGER)
+                                    OR SUM(DISTINCT CASE WHEN NOT COALESCE(adeleted, FALSE) and attr_typ is NOT NULL THEN 1 ELSE 0 END) < CAST(`minCount` AS INTEGER))
+
+UNION ALL
+
+SELECT this AS resource,
+ 'MinLengthConstraintComponent(' || `parentPath` || `printPath` || ')' AS event,
+    `constraint_id` as constraint_id,
+    true as triggered,
+    `severity` AS severity,
+    'Model validation for Property ' || `propertyPath` || ' failed for ' || this || '. Length of ' || IFNULL(val, 'NULL') || ' is < ' || `minLength` || '.'
+         as `text`
+        
+        ,CURRENT_TIMESTAMP
+        
+FROM A1 WHERE `minLength` IS NOT NULL and `index` IS NOT NULL AND 
+NOT edeleted  AND NOT IFNULL(adeleted, false) AND attr_typ IS NOT NULL AND LENGTH(val) < CAST(`minLength` AS INTEGER)
+
+UNION ALL
+
+SELECT this AS resource,
+ 'MaxLengthConstraintComponent(' || `parentPath` || `printPath` || ')' AS event,
+    `constraint_id` as constraint_id,
+    true as triggered,
+    `severity` AS severity,
+    'Model validation for Property ' || `propertyPath` || ' failed for ' || this || '. Length of ' || IFNULL(val, 'NULL') || ' is > ' || `maxLength` || '.'
+         as `text`
+        
+        ,CURRENT_TIMESTAMP
+        
+FROM A1 WHERE `maxLength` IS NOT NULL and `index` IS NOT NULL AND 
+NOT edeleted  AND NOT IFNULL(adeleted, false) AND attr_typ IS NOT NULL AND LENGTH(val) > CAST(`maxLength` AS INTEGER)
+
+UNION ALL
+
+
+
+
+
+SELECT this AS resource,
+ 'DatatypeConstraintComponent(' || `parentPath` || `printPath` || ')' AS event,
+    `constraint_id` as constraint_id,
+    true as triggered,
+    `severity` AS severity,
+    'Datatype check failed: ' || CASE WHEN `propertyNodetype` = '@value' THEN
+        'value="' || COALESCE(`val`, 'NULL') || '", expected datatypes="' || COALESCE(`datatypes`, 'NULL')
+        || '" and found datatype="' || COALESCE(`valueType`, 'NULL') || '" do not match!'  ELSE '" There is a mismatch between value "'
+                                            || `val`
+                                            || '", expected datatypes "'
+                                            || `datatypes`
+                                            || '" and '
+                                            || 'property node type "'
+                                            || `propertyNodetype`
+                                            || '".'
+        END
+       as `text`
+        
+        ,CURRENT_TIMESTAMP
+        
+FROM A1 where `index` IS NOT NULL AND `propertyNodetype` IN ('@value', '@list', '@json') AND (
+NOT edeleted AND NOT IFNULL(adeleted, false) AND attr_typ IS NOT NULL AND
+        CASE WHEN propertyNodetype = '@value' AND datatypes IS NOT NULL THEN
+            CASE
+                WHEN `val` IS NULL THEN true -- val cannot be NULL when a datatype is defined
+                WHEN NOT (
+(datatypes LIKE '%http://www.w3.org/2001/XMLSchema#double%' OR
+ datatypes LIKE '%http://www.w3.org/2001/XMLSchema#boolean%' OR
+ datatypes LIKE '%http://www.w3.org/2001/XMLSchema#integer%' OR
+ datatypes LIKE '%http://www.w3.org/2001/XMLSchema#string%'
+)
+) THEN false -- we check only common datatypes
+                ELSE NOT (
+(datatypes LIKE '%http://www.w3.org/2001/XMLSchema#double%' AND COALESCE(`valueType`, 'http://www.w3.org/2001/XMLSchema#double') = 'http://www.w3.org/2001/XMLSchema#double'
+        AND `val`  REGEXP '^(?:0|[+-]?(?:\d+\.\d*|\.\d+|\d+(?:[eE][+-]?\d+)))$')
+    OR (datatypes LIKE '%http://www.w3.org/2001/XMLSchema#integer%' AND COALESCE(`valueType`, 'http://www.w3.org/2001/XMLSchema#integer') = 'http://www.w3.org/2001/XMLSchema#integer'
+        AND `val` REGEXP '^[+-]?\d+$')
+    OR (datatypes LIKE '%http://www.w3.org/2001/XMLSchema#boolean%' AND COALESCE(`valueType`, 'http://www.w3.org/2001/XMLSchema#boolean') = 'http://www.w3.org/2001/XMLSchema#boolean'
+        AND `val`  REGEXP '^(?i:true|false)$')
+    OR (datatypes LIKE '%http://www.w3.org/2001/XMLSchema#string%' AND COALESCE(`valueType`, 'http://www.w3.org/2001/XMLSchema#string') = 'http://www.w3.org/2001/XMLSchema#string')
+) -- if val is defined and datatypes are known, we check the value
+            END
+        WHEN propertyNodetype = '@json' THEN
+            CASE
+                WHEN json_valid(`val`) AND json_type(`val`) = 'object' THEN false
+                ELSE true
+            END
+        WHEN propertyNodetype = '@list' THEN
+            CASE
+                WHEN json_valid(`val`) AND json_type(`val`) = 'array' THEN false
+                ELSE true
+            END
+        ELSE false -- we do not check other propertyNodetypes
+        END
+)
+UNION ALL
+
+  SELECT this           AS resource,
+  'HasValueConstraintComponent('
+    || parentPath
+    || propertyPath
+    || ')'         AS event,
+  `constraint_id` as constraint_id,
+  TRUE AS triggered,
+  `severity` AS severity,
+  'Model validation for Property '
+      || propertyPath
+      || ' failed for '
+      || this
+      || '. Value "'
+      || val
+      || '" does not match required "'
+      || hasValue
+      || '".'
+    AS text
+  , CURRENT_TIMESTAMP
+FROM A1
+
+WHERE hasValue IS NOT NULL AND `index` IS NOT NULL AND 
+  /* only non-deleted entities with a value present */
+  NOT edeleted AND NOT IFNULL(adeleted, false)
+  AND attr_typ IS NOT NULL
+  /* and the actual value <> the required hasValue constant */
+  AND CASE WHEN `valueType` = 'http://www.w3.org/2001/XMLSchema#double' THEN CAST(val as DOUBLE) <>
+        CAST(hasValue as DOUBLE)
+    WHEN `valueType` = 'http://www.w3.org/2001/XMLSchema#integer' THEN CAST(val as INTEGER) <>
+        CAST(hasValue as INTEGER)
+    WHEN `valueType` = 'http://www.w3.org/2001/XMLSchema#boolean' THEN CAST(val as BOOLEAN) <>
+        CAST(hasValue as BOOLEAN)
+    ELSE `val` <> `hasValue`END
+;
+INSERT OR REPlACE  INTO constraint_trigger_table
+WITH
+  -- 1) How many members each OR-rule has
+  needed AS (
+    SELECT /*+ STATE_TTL('constraint_combination_table' = '0d') */
+      target_constraint_id,
+      COUNT(*) AS needed_count
+    FROM
+      constraint_combination_table
+    WHERE
+      operation = 'OR'
+    GROUP BY
+      target_constraint_id
+  ),
+
+  -- 2) For each resource/target, find how many distinct members actually triggered
+  --    and collect their events
+  fired AS (
+    SELECT /*+ STATE_TTL('comb' = '0d') */ DISTINCT
+      t.resource,
+      comb.target_constraint_id,
+      nm.needed_count as needed_count,
+      COUNT(DISTINCT CASE WHEN t.triggered THEN t.constraint_id ELSE NULL END) AS fired_count,
+      
+      -- SQLite: GROUP_CONCAT only takes one argument when DISTINCT
+      'OR Constraint id ' || comb.target_constraint_id AS events,
+      'AND(' || GROUP_CONCAT(DISTINCT t.text) || ')' AS texts
+      
+ FROM (
+      -- Pre-sort the data for Calcite
+      SELECT *
+      FROM constraint_trigger_table
+      ORDER BY event, text
+    ) AS t
+    JOIN
+      constraint_combination_table AS comb
+      ON comb.member_constraint_id = t.constraint_id
+     AND comb.operation            = 'OR'
+    JOIN
+      needed AS nm
+      ON nm.target_constraint_id   = comb.target_constraint_id
+    GROUP BY
+      t.resource,
+      comb.target_constraint_id,
+      nm.needed_count
+  )
+
+SELECT /*+ STATE_TTL('ct' = '0d') */
+  f.resource                             AS resource,
+  f.events                               AS event,
+  f.target_constraint_id                 AS constraint_id,
+     (f.needed_count = IFNULL(f.fired_count, 0)) AS triggered,
+     CASE WHEN f.needed_count = IFNULL(f.fired_count, 0) THEN ct.severity ELSE 'ok' END AS severity,
+CASE WHEN f.needed_count = IFNULL(f.fired_count, 0) THEN f.texts ELSE 'All ok' END AS text
+  
+    ,CURRENT_TIMESTAMP AS ts
+    
+FROM  constraint_table AS ct JOIN  fired AS f  ON ct.id = f.target_constraint_id;
+;
+
+INSERT  OR REPlACE INTO alerts_bulk
+SELECT /*+ STATE_TTL('comb' = '0d', 'ct' = '0d') */
+  t.resource,
+  t.event,
+  'Development'                      AS environment,
+    
+    '[SHACL Validator]' AS service,
+    
+
+  MAX(t.severity) AS severity,
+  'customer'                        AS customer,
+ MAX(t.text) AS text
+    
+    ,CURRENT_TIMESTAMP
+    
+FROM
+  constraint_trigger_table AS t
+  JOIN constraint_combination_table AS comb
+    ON comb.operation = 'PUBLISH'
+   AND comb.member_constraint_id = t.constraint_id
+  JOIN constraint_table AS ct
+    ON ct.id = comb.member_constraint_id
+GROUP BY
+  t.resource,
+  t.event
+  HAVING MAX(CASE WHEN t.triggered THEN 1 ELSE 0 END) = 1;
+

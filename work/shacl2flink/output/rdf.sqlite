@@ -1,0 +1,28 @@
+DROP TABLE IF EXISTS `rdf`;
+CREATE TABLE `rdf` (
+`subject` STRING,
+`predicate` STRING,
+`object` STRING,
+`index` INTEGER,
+PRIMARY KEY(`subject`,`predicate`,`index`)
+);
+
+INSERT OR REPLACE INTO `rdf` VALUES
+('<https://example.org/ontology#MachineState>', '<http://www.w3.org/2000/01/rdf-schema#subClassOf>', '<https://example.org/ontology#MachineState>', 0),
+('<https://example.org/ontology#Workpiece>', '<http://www.w3.org/2000/01/rdf-schema#subClassOf>', '<https://example.org/ontology#Workpiece>', 0),
+('<https://example.org/ontology#Machine>', '<http://www.w3.org/2000/01/rdf-schema#subClassOf>', '<https://example.org/ontology#Machine>', 0),
+('<https://example.org/ontology#Cutter>', '<http://www.w3.org/2000/01/rdf-schema#subClassOf>', '<https://example.org/ontology#Cutter>', 0),
+('<http://www.w3.org/2000/01/rdf-schema#subClassOf>', '<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>', '<http://www.w3.org/2002/07/owl#TransitiveProperty>', 0),
+('<https://example.org/ontology#>', '<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>', '<http://www.w3.org/2002/07/owl#Ontology>', 0),
+('<https://example.org/ontology#Machine>', '<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>', '<http://www.w3.org/2002/07/owl#Class>', 0),
+('<https://example.org/ontology#Cutter>', '<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>', '<http://www.w3.org/2002/07/owl#Class>', 0),
+('<https://example.org/ontology#Cutter>', '<http://www.w3.org/2000/01/rdf-schema#subClassOf>', '<https://example.org/ontology#Machine>', 1),
+('<https://example.org/ontology#Workpiece>', '<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>', '<http://www.w3.org/2002/07/owl#Class>', 0),
+('<https://example.org/ontology#hasWorkpiece>', '<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>', '<http://www.w3.org/2002/07/owl#ObjectProperty>', 0),
+('<https://example.org/ontology#hasWorkpiece>', '<http://www.w3.org/2000/01/rdf-schema#domain>', '<https://example.org/ontology#Cutter>', 0),
+('<https://example.org/ontology#hasWorkpiece>', '<http://www.w3.org/2000/01/rdf-schema#range>', '<https://example.org/ontology#Workpiece>', 0),
+('<https://example.org/ontology#state_ON>', '<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>', '<https://example.org/ontology#MachineState>', 0),
+('<https://example.org/ontology#state_ON>', '<http://www.w3.org/2000/01/rdf-schema#label>', '"ON"', 0),
+('<https://example.org/ontology#state_OFF>', '<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>', '<https://example.org/ontology#MachineState>', 0),
+('<https://example.org/ontology#state_OFF>', '<http://www.w3.org/2000/01/rdf-schema#label>', '"OFF"', 0),
+('<https://example.org/ontology#MachineState>', '<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>', '<http://www.w3.org/2002/07/owl#Class>', 0);

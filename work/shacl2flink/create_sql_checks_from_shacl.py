@@ -26,7 +26,7 @@ import ruamel.yaml
 import rdflib
 import argparse
 
-commonyamlfile = '../../helm/common.yaml'
+commonyamlfile = '../helm/common.yaml'
 
 
 def parse_args(args=sys.argv[1:]):

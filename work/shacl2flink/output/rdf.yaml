@@ -1,0 +1,26 @@
+---
+apiVersion: industry-fusion.com/v1alpha2
+kind: BeamSqlTable
+metadata:
+  name: rdf
+spec:
+  name: rdf
+  connector: upsert-kafka
+  fields:
+  - subject: STRING
+  - predicate: STRING
+  - object: STRING
+  - index: INTEGER
+  kafka:
+    topic: '{{ .Values.kafkaBridge.debezium.rdf.topic }}'
+    properties:
+      bootstrap.servers: '{{.Values.kafka.bootstrapServer}}'
+    key.format: json
+  value:
+    format: json
+    json.fail-on-missing-field: false
+    json.ignore-parse-errors: true
+  primaryKey:
+  - subject
+  - predicate
+  - index

@@ -1,0 +1,52 @@
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: iff.ngsild.entities
+  labels:
+    strimzi.io/cluster: my-cluster
+spec:
+  partitions: 1
+  replicas: 1
+  config:
+    retention.ms: '{{.Values.kafkaBridge.debezium.entityTopicRetention}}'
+  topicName: iff.ngsild.entities
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: '{{.Values.kafkaBridge.flink.constraintTopic.objectName}}'
+  labels:
+    strimzi.io/cluster: my-cluster
+spec:
+  partitions: 1
+  replicas: 1
+  config:
+    retention.ms: '{{.Values.kafkaBridge.debezium.entityTopicRetention}}'
+  topicName: '{{.Values.kafkaBridge.flink.constraintTopic.topicName}}'
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: '{{.Values.kafkaBridge.flink.constraintTriggerTopic.objectName}}'
+  labels:
+    strimzi.io/cluster: my-cluster
+spec:
+  partitions: 1
+  replicas: 1
+  config:
+    retention.ms: '{{.Values.kafkaBridge.debezium.entityTopicRetention}}'
+  topicName: '{{.Values.kafkaBridge.flink.constraintTriggerTopic.topicName}}'
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: '{{.Values.kafkaBridge.flink.constraintCombinationTopic.objectName}}'
+  labels:
+    strimzi.io/cluster: my-cluster
+spec:
+  partitions: 1
+  replicas: 1
+  config:
+    retention.ms: '{{.Values.kafkaBridge.debezium.entityTopicRetention}}'
+  topicName: '{{.Values.kafkaBridge.flink.constraintCombinationTopic.topicName}}'

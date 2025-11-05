@@ -1,0 +1,40 @@
+
+ALTER DEFAULT PRIVILEGES FOR ROLE flink_writer_user IN SCHEMA public
+  GRANT SELECT ON TABLES TO flink_repl_user;
+ALTER DEFAULT PRIVILEGES FOR ROLE flink_writer_user IN SCHEMA public
+  GRANT USAGE, SELECT ON SEQUENCES TO flink_repl_user;
+
+
+DROP TABLE IF EXISTS "constraint_table";
+CREATE TABLE "constraint_table" (
+"id" BIGINT,
+"targetClass" TEXT,
+"propertyPath" TEXT,
+"subpropertyPath" TEXT,
+"propertyClass" TEXT,
+"propertyNodetype" TEXT,
+"attributeType" TEXT,
+"maxCount" TEXT,
+"minCount" TEXT,
+"severity" TEXT,
+"minExclusive" TEXT,
+"maxExclusive" TEXT,
+"minInclusive" TEXT,
+"maxInclusive" TEXT,
+"minLength" TEXT,
+"maxLength" TEXT,
+"pattern" TEXT,
+"ins" TEXT,
+"datatypes" TEXT,
+"hasValue" TEXT,
+PRIMARY KEY("id")
+);
+
+DROP TABLE IF EXISTS "constraint_combination_table";
+CREATE TABLE "constraint_combination_table" (
+"member_constraint_id" BIGINT,
+"operation" TEXT,
+"target_constraint_id" BIGINT,
+PRIMARY KEY("member_constraint_id","target_constraint_id")
+);
+

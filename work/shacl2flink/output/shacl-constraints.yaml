@@ -1,0 +1,26 @@
+apiVersion: industry-fusion.com/v1alpha4
+kind: BeamSqlStatementSet
+metadata:
+  name: shacl-constraints
+spec:
+  tables:
+  - constraint-trigger-table
+  - constraint-combination-table
+  - attributes
+  - alerts-bulk
+  - constraint-table
+  - entities
+  - attributes-insert
+  - rdf
+  views:
+  - attributes-view
+  - entities-view
+  sqlsettings:
+  - table.exec.sink.upsert-materialize: none
+  - execution.savepoint.ignore-unclaimed-state: 'true'
+  - pipeline.object-reuse: 'true'
+  - parallelism.default: '{{ .Values.flink.defaultParalellism }}'
+  - table.exec.source.idle-timeout: '{{ .Values.flink.idleTimeout }}'
+  - table.exec.state.ttl: '{{.Values.flink.ttl}}'
+  sqlstatementmaps: []
+  updateStrategy: none

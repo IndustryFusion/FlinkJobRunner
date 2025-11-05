@@ -1,0 +1,141 @@
+---
+apiVersion: industry-fusion.com/v1alpha2
+kind: BeamSqlTable
+metadata:
+  name: entities
+spec:
+  name: entities
+  connector: kafka
+  fields:
+  - 'id': STRING
+  - 'type': STRING
+  - 'deleted': BOOLEAN
+  - 'ts': TIMESTAMP(3) METADATA FROM 'timestamp'
+  - watermark: FOR `ts` AS `ts`
+  kafka:
+    topic: iff.ngsild.entities
+    properties:
+      bootstrap.servers: '{{.Values.kafka.bootstrapServer}}'
+    scan.startup.mode: latest-offset
+  value:
+    format: json
+    json.fail-on-missing-field: false
+    json.ignore-parse-errors: true
+---
+apiVersion: industry-fusion.com/v1alpha1
+kind: BeamSqlView
+metadata:
+  name: entities-view
+spec:
+  name: entities_view
+  sqlstatement: "SELECT `type`,\n `id`,\n `deleted`,\n `ts` FROM (\n  SELECT *,\n\
+    ROW_NUMBER() OVER (PARTITION BY `id`\nORDER BY ts DESC) AS rownum\nFROM `entities`\
+    \ )\nWHERE rownum = 1"
+---
+
+{{- $canLookup := not (empty (lookup "v1" "Namespace" "" "kube-system")) -}}
+{{- $password := "PLACEHOLDER" -}}
+{{- $secName := trim (required "Set .Values.flink.db.replicationUserSecret" .Values.flink.db.replicationUserSecret) -}}
+{{- $sec := lookup "v1" "Secret" .Release.Namespace $secName -}}
+{{- if and $canLookup (not $sec) -}}
+  {{- fail (printf "Secret %q not found in %s" $secName .Release.Namespace) -}}
+{{- end -}}
+{{- if $canLookup -}}
+  {{- $password := b64dec (get $sec.data "password") -}}
+{{- end }}
+apiVersion: industry-fusion.com/v1alpha3
+kind: BeamSqlTable
+metadata:
+  name: constraint-table
+spec:
+  name: constraint_table
+  connector: postgres-cdc
+  fields:
+  - id: INTEGER
+  - targetClass: STRING
+  - propertyPath: STRING
+  - subpropertyPath: STRING
+  - propertyClass: STRING
+  - propertyNodetype: STRING
+  - attributeType: STRING
+  - maxCount: STRING
+  - minCount: STRING
+  - severity: STRING
+  - minExclusive: STRING
+  - maxExclusive: STRING
+  - minInclusive: STRING
+  - maxInclusive: STRING
+  - minLength: STRING
+  - maxLength: STRING
+  - pattern: STRING
+  - ins: STRING
+  - datatypes: STRING
+  - hasValue: STRING
+  cdc:
+    hostname: '{{.Values.clusterSvcName}}'
+    port: '{{.Values.db.svcPort}}'
+    username: '{{ .Values.flink.db.replicationUser }}'
+    password: '{{ (dig "data" "password" "" $sec | b64dec | default "PLACEHOLDER")
+      }}'
+    database-name: '{{.Values.flink.db.name}}'
+    schema-name: '{{.Values.flink.db.schema}}'
+    table-name: constraint_table
+    slot.name: '{{.Values.flink.db.constraintSlotName}}'
+    debezium.database.sslmode: require
+  primaryKey:
+  - id
+---
+apiVersion: industry-fusion.com/v1alpha2
+kind: BeamSqlTable
+metadata:
+  name: constraint-trigger-table
+spec:
+  name: constraint_trigger_table
+  connector: upsert-kafka
+  fields:
+  - resource: STRING
+  - event: STRING
+  - constraint_id: INTEGER
+  - triggered: BOOLEAN
+  - severity: STRING
+  - text: STRING
+  - ts: TIMESTAMP(3) METADATA FROM 'timestamp' VIRTUAL
+  kafka:
+    topic: '{{.Values.kafkaBridge.flink.constraintTriggerTopic.topicName}}'
+    properties:
+      bootstrap.servers: '{{.Values.kafka.bootstrapServer}}'
+    key.format: json
+  value:
+    format: json
+    json.fail-on-missing-field: false
+    json.ignore-parse-errors: true
+  primaryKey:
+  - resource
+  - constraint_id
+  - event
+---
+apiVersion: industry-fusion.com/v1alpha3
+kind: BeamSqlTable
+metadata:
+  name: constraint-combination-table
+spec:
+  name: constraint_combination_table
+  connector: postgres-cdc
+  fields:
+  - member_constraint_id: INTEGER
+  - operation: STRING
+  - target_constraint_id: INTEGER
+  cdc:
+    hostname: '{{.Values.clusterSvcName}}'
+    port: '{{.Values.db.svcPort}}'
+    username: '{{ .Values.flink.db.replicationUser }}'
+    password: '{{ (dig "data" "password" "" $sec | b64dec | default "PLACEHOLDER")
+      }}'
+    database-name: '{{.Values.flink.db.name}}'
+    schema-name: '{{.Values.flink.db.schema}}'
+    table-name: constraint_combination_table
+    slot.name: '{{.Values.flink.db.constraintCombinationSlotName}}'
+    debezium.database.sslmode: require
+  primaryKey:
+  - member_constraint_id
+  - target_constraint_id

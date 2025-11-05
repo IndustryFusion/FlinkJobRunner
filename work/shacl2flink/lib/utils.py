@@ -26,7 +26,7 @@ from collections import deque
 from lib.configs import constraint_table_name, constraint_trigger_table_name, constraint_combination_table_name
 
 NGSILD = Namespace('https://uri.etsi.org/ngsi-ld/')
-commonyamlfile = '../../../helm/common.yaml'
+commonyamlfile = '../../helm/common.yaml'
 
 
 class WrongSparqlStructure(Exception):

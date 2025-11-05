@@ -1,0 +1,116 @@
+DROP TABLE IF EXISTS `alerts`;
+CREATE TABLE `alerts` (
+`resource` STRING,
+`event` STRING,
+`environment` STRING,
+`service` STRING,
+`severity` STRING,
+`customer` STRING,
+`text` STRING,
+PRIMARY KEY(`resource`,`event`)
+);
+
+DROP TABLE IF EXISTS `alerts_bulk`;
+CREATE TABLE `alerts_bulk` (
+`resource` STRING,
+`event` STRING,
+`environment` STRING,
+`service` STRING,
+`severity` STRING,
+`customer` STRING,
+`text` STRING,
+`ts` DEFAULT CURRENT_TIMESTAMP,
+PRIMARY KEY(`resource`,`event`)
+);
+
+DROP VIEW IF EXISTS `alerts_bulk_view`;
+CREATE VIEW `alerts_bulk_view` AS
+SELECT `resource`,
+`event`,
+`environment`,
+`service`,
+`severity`,
+`customer`,
+`text`,
+`ts` FROM (
+  SELECT *,
+ROW_NUMBER() OVER (PARTITION BY `resource`,`event`
+ORDER BY ts DESC) AS rownum
+FROM `alerts_bulk` )
+WHERE rownum = 1;
+
+DROP TABLE IF EXISTS `ngsild_updates`;
+CREATE TABLE `ngsild_updates` (
+`op` STRING,
+`overwirteOrReplace` BOOLEAN,
+`noForward` BOOLEAN,
+`entities` STRING);
+
+DROP TABLE IF EXISTS `attributes`;
+CREATE TABLE `attributes` (
+`id` TEXT,
+`parentId` TEXT,
+`entityId` TEXT,
+`name` TEXT,
+`nodeType` TEXT,
+`valueType` TEXT,
+`type` TEXT,
+`attributeValue` TEXT,
+`datasetId` TEXT,
+`unitCode` TEXT,
+`lang` TEXT,
+`deleted` BOOLEAN,
+`synced` BOOLEAN,
+`ts` DEFAULT CURRENT_TIMESTAMP);
+
+DROP VIEW IF EXISTS `attributes_view`;
+CREATE VIEW `attributes_view` AS
+SELECT `type`,
+`id`,
+`parentId`,
+`entityId`,
+`name`,
+`nodeType`,
+`valueType`,
+`attributeValue`,
+`datasetId`,
+`unitCode`,
+`lang`,
+`deleted`,
+`synced`,
+`ts` FROM (
+  SELECT *,
+ROW_NUMBER() OVER (PARTITION BY `id`,`datasetId`
+ORDER BY ts DESC) AS rownum
+FROM `attributes` )
+WHERE rownum = 1;
+
+DROP TABLE IF EXISTS `attributes_insert_filter`;
+CREATE TABLE `attributes_insert_filter` (
+`id` STRING,
+`parentId` STRING,
+`entityId` STRING,
+`name` STRING,
+`nodeType` STRING,
+`valueType` STRING,
+`type` STRING,
+`attributeValue` STRING,
+`datasetId` STRING,
+`unitCode` STRING,
+`lang` STRING,
+`deleted` BOOLEAN,
+`synced` BOOLEAN,
+`ts` DEFAULT CURRENT_TIMESTAMP);
+
+DROP TABLE IF EXISTS `constraints`;
+CREATE TABLE `constraints` (
+`resource` STRING,
+`event` STRING,
+`environment` STRING,
+`service` STRING,
+`severity` STRING,
+`customer` STRING,
+`text` STRING,
+PRIMARY KEY(`resource`,`event`)
+);
+

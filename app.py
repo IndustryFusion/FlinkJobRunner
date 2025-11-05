@@ -16,20 +16,20 @@ RUNNER_BIND = os.getenv("RUNNER_BIND", "0.0.0.0")
 RUNNER_PORT = int(os.getenv("RUNNER_PORT", "8080"))
 
 # Absolute path to your DigitalTwin project (contains Makefile and tool folders)
-DIGITALTWIN_ROOT = Path(os.getenv("DIGITALTWIN_ROOT", "/opt/digitaltwin")).resolve()
+DIGITALTWIN_ROOT = Path(os.getenv("DIGITALTWIN_ROOT", "./work/shacl2flink")).resolve()
 
 # Where per-job working dirs live (logs, inputs, temp)
 WORK_ROOT = Path(os.getenv("WORK_ROOT", "./work")).resolve()
 print(f"WORK_ROOT is set to: {WORK_ROOT}")
-# Path to kubeconfig file mounted as secret or volume
-KUBECONFIG_PATH = Path(os.getenv("KUBECONFIG_PATH", "/secrets/kubeconfig")).resolve()
+# Path to kubeconfig file mounted as secret or volume (optional for in-cluster)
+KUBECONFIG_PATH = os.getenv("KUBECONFIG_PATH", "./secrets/kubeconfig")
 
 # Optional: map of allowed make targets to safe values (defense-in-depth)
-ALLOWED_TARGETS = set(os.getenv("ALLOWED_TARGETS", "deploy,validate,plan").split(","))
+ALLOWED_TARGETS = set(os.getenv("ALLOWED_TARGETS", "setup,flink-deploy,deploy,validate,plan,setup-and-deploy").split(","))
 
 # Folder (relative to the project root) where files must be placed for the tool
-# e.g., "input" or "config/ttl" — change to match your tool’s expectation
-TOOL_INPUT_SUBDIR = os.getenv("TOOL_INPUT_SUBDIR", "input")
+# e.g., "input" or "config/ttl" — change to match your tool's expectation
+TOOL_INPUT_SUBDIR = os.getenv("TOOL_INPUT_SUBDIR", "../kms")
 
 # ======== State ========
 app = Flask(__name__)
@@ -44,8 +44,8 @@ class JobState:
         self.proc: Optional[subprocess.Popen] = None
         self.log_path: Path = WORK_ROOT / job_id / "runner.log"
         self.work_dir: Path = WORK_ROOT / job_id
-        self.tool_dir: Path = self.work_dir / "shacl2flink"  # copy/symlink repo here
-        self.input_dir: Path = self.tool_dir / TOOL_INPUT_SUBDIR
+        self.tool_dir: Path = DIGITALTWIN_ROOT  # use the shacl2flink directory directly
+        self.input_dir: Path = WORK_ROOT / "kms"  # use the existing kms folder
         self.last_error: Optional[str] = None
         self._log_q: "queue.Queue[str]" = queue.Queue()
 
@@ -61,10 +61,8 @@ JOBS_LOCK = threading.Lock()
 def ensure_dirs(job: JobState):
     job.work_dir.mkdir(parents=True, exist_ok=True)
     job.input_dir.mkdir(parents=True, exist_ok=True)
-    # bring the Makefile project in (choose one: copy or symlink)
-    if not job.tool_dir.exists():
-        # faster: symlink. If you need job-local copies, switch to shutil.copytree
-        job.tool_dir.symlink_to(DIGITALTWIN_ROOT, target_is_directory=True)
+    # tool_dir now points directly to the existing shacl2flink directory
+    # no need to create symlinks since we're using the existing structure
 
 def download_to_file(url: str, dest: Path, timeout=120):
     # Assumes pre-signed URLs or public HTTP(S)
@@ -122,25 +120,40 @@ def run_tool(job: JobState, target: str, env: dict):
         job.set_status("RUNNING")
         append_log(job, f"Starting job {job.job_id} with target '{target}'")
 
-        cmd = ["make", target]
-        proc = subprocess.Popen(
-            cmd,
-            cwd=str(job.tool_dir),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            env=env,
-        )
-        job.proc = proc
-
-        stream_subprocess_logs(proc, job)
-
-        rc = proc.wait()
-        if rc == 0:
-            job.set_status("SUCCEEDED")
-            append_log(job, f"Job {job.job_id} finished successfully.")
+        # Handle sequential targets
+        if target == "setup-and-deploy":
+            targets = ["setup", "flink-deploy"]
         else:
-            job.set_status("FAILED")
-            append_log(job, f"Job {job.job_id} failed with exit code {rc}")
+            targets = [target]
+
+        # Run each target sequentially
+        for i, current_target in enumerate(targets):
+            append_log(job, f"Running step {i+1}/{len(targets)}: make {current_target}")
+            
+            cmd = ["make", current_target]
+            proc = subprocess.Popen(
+                cmd,
+                cwd=str(job.tool_dir),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                env=env,
+            )
+            job.proc = proc
+
+            stream_subprocess_logs(proc, job)
+
+            rc = proc.wait()
+            if rc == 0:
+                append_log(job, f"Step {i+1}/{len(targets)} (make {current_target}) completed successfully.")
+            else:
+                job.set_status("FAILED")
+                append_log(job, f"Step {i+1}/{len(targets)} (make {current_target}) failed with exit code {rc}")
+                return  # Stop on first failure
+
+        # All steps completed successfully
+        job.set_status("SUCCEEDED")
+        append_log(job, f"Job {job.job_id} finished successfully. All {len(targets)} steps completed.")
+        
     except Exception as e:
         job.set_status("FAILED")
         job.last_error = str(e)
@@ -151,12 +164,22 @@ def run_tool(job: JobState, target: str, env: dict):
 def start_job_thread(job: JobState, target: str, kube_context: Optional[str]):
     # Prepare ENV for the tool
     env = os.environ.copy()
-    env["KUBECONFIG"] = str(KUBECONFIG_PATH)
+    # Only set KUBECONFIG if path is provided and exists (for local development)
+    if KUBECONFIG_PATH and Path(KUBECONFIG_PATH).exists():
+        env["KUBECONFIG"] = str(KUBECONFIG_PATH)
+    # For Kubernetes pods, kubectl will use in-cluster authentication automatically
     if kube_context:
         env["KUBE_CONTEXT"] = kube_context  # if your Makefile uses it
 
+    # Add thread logging
+    append_log(job, f"Starting thread for job {job.job_id} with target '{target}'")
+    if kube_context:
+        append_log(job, f"Using kube context: {kube_context}")
+    
     t = threading.Thread(target=run_tool, args=(job, target, env), daemon=True)
     t.start()
+    
+    append_log(job, f"Thread started for job {job.job_id}")
 
 # ========= API =========
 
@@ -201,15 +224,20 @@ def create_job():
     # Prepare work folder and inputs
     try:
         ensure_dirs(job)
-        # Place files where your tool expects them:
-        # e.g., <project>/<TOOL_INPUT_SUBDIR>/knowledge.ttl and shacl.ttl
+        # Download files directly to the kms folder that the Makefile uses
         knowledge_dest = job.input_dir / "knowledge.ttl"
         shacl_dest = job.input_dir / "shacl.ttl"
 
-        append_log(job, "Downloading input files...")
+        append_log(job, f"Downloading input files to {job.input_dir}...")
+        append_log(job, f"Downloading knowledge.ttl from: {knowledge_url}")
         download_to_file(knowledge_url, knowledge_dest)
+        append_log(job, f"Downloaded knowledge.ttl ({knowledge_dest.stat().st_size} bytes)")
+        
+        append_log(job, f"Downloading shacl.ttl from: {shacl_url}")
         download_to_file(shacl_url, shacl_dest)
-        append_log(job, f"Inputs placed in {job.input_dir}")
+        append_log(job, f"Downloaded shacl.ttl ({shacl_dest.stat().st_size} bytes)")
+        
+        append_log(job, f"All input files ready in {job.input_dir}")
 
         # Optionally: write a job metadata file consumed by Make/Python
         meta_file = job.work_dir / "job.json"
@@ -323,7 +351,11 @@ def cancel_job(job_id: str):
 # Health
 @app.route("/healthz", methods=["GET"])
 def health():
-    ok = DIGITALTWIN_ROOT.exists() and KUBECONFIG_PATH.exists()
+    # Check if essential directories exist
+    digitaltwin_ok = Path(DIGITALTWIN_ROOT).exists()
+    # For Kubernetes pods, kubeconfig might not exist (using in-cluster auth)
+    kubeconfig_ok = not KUBECONFIG_PATH or Path(KUBECONFIG_PATH).exists()
+    ok = digitaltwin_ok and kubeconfig_ok
     return ("ok", 200) if ok else ("bad", 500)
 
 if __name__ == "__main__":

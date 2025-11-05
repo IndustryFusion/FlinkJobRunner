@@ -1,0 +1,64 @@
+DROP TABLE IF EXISTS `entities`;
+CREATE TABLE `entities` (
+`id` STRING,
+`type` STRING,
+`deleted` BOOLEAN,
+`ts` DEFAULT CURRENT_TIMESTAMP);
+
+DROP VIEW IF EXISTS `entities_view`;
+CREATE VIEW `entities_view` AS
+SELECT `type`,
+`id`,
+`deleted`,
+`ts` FROM (
+  SELECT *,
+ROW_NUMBER() OVER (PARTITION BY `id`
+ORDER BY ts DESC) AS rownum
+FROM `entities` )
+WHERE rownum = 1;
+
+DROP TABLE IF EXISTS `constraint_table`;
+CREATE TABLE `constraint_table` (
+`id` INTEGER,
+`targetClass` STRING,
+`propertyPath` STRING,
+`subpropertyPath` STRING,
+`propertyClass` STRING,
+`propertyNodetype` STRING,
+`attributeType` STRING,
+`maxCount` STRING,
+`minCount` STRING,
+`severity` STRING,
+`minExclusive` STRING,
+`maxExclusive` STRING,
+`minInclusive` STRING,
+`maxInclusive` STRING,
+`minLength` STRING,
+`maxLength` STRING,
+`pattern` STRING,
+`ins` STRING,
+`datatypes` STRING,
+`hasValue` STRING,
+PRIMARY KEY(`id`)
+);
+
+DROP TABLE IF EXISTS `constraint_trigger_table`;
+CREATE TABLE `constraint_trigger_table` (
+`resource` STRING,
+`event` STRING,
+`constraint_id` INTEGER,
+`triggered` BOOLEAN,
+`severity` STRING,
+`text` STRING,
+`ts` DEFAULT CURRENT_TIMESTAMP,
+PRIMARY KEY(`resource`,`constraint_id`,`event`)
+);
+
+DROP TABLE IF EXISTS `constraint_combination_table`;
+CREATE TABLE `constraint_combination_table` (
+`member_constraint_id` INTEGER,
+`operation` STRING,
+`target_constraint_id` INTEGER,
+PRIMARY KEY(`member_constraint_id`,`target_constraint_id`)
+);
+

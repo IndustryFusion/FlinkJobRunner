@@ -1,0 +1,233 @@
+---
+apiVersion: industry-fusion.com/v1alpha2
+kind: BeamSqlTable
+metadata:
+  name: alerts
+spec:
+  name: alerts
+  connector: upsert-kafka
+  fields:
+  - resource: STRING
+  - event: STRING
+  - environment: STRING
+  - service: ARRAY<STRING>
+  - severity: STRING
+  - customer: STRING
+  - text: STRING
+  kafka:
+    topic: '{{.Values.kafkaBridge.alerta.listenTopic}}'
+    properties:
+      bootstrap.servers: '{{.Values.kafka.bootstrapServer}}'
+    key.format: json
+  value:
+    format: json
+    json.fail-on-missing-field: false
+    json.ignore-parse-errors: true
+  primaryKey:
+  - resource
+  - event
+---
+apiVersion: industry-fusion.com/v1alpha2
+kind: BeamSqlTable
+metadata:
+  name: alerts-bulk
+spec:
+  name: alerts_bulk
+  connector: upsert-kafka
+  fields:
+  - resource: STRING
+  - event: STRING
+  - environment: STRING
+  - service: ARRAY<STRING>
+  - severity: STRING
+  - customer: STRING
+  - text: STRING
+  - watermark: FOR `ts` AS `ts`
+  - ts: ' TIMESTAMP(3) METADATA VIRTUAL'
+  kafka:
+    topic: '{{.Values.kafkaBridge.alerta.bulkTopic}}'
+    properties:
+      bootstrap.servers: '{{.Values.kafka.bootstrapServer}}'
+    key.format: json
+  value:
+    format: json
+    json.fail-on-missing-field: false
+    json.ignore-parse-errors: true
+  primaryKey:
+  - resource
+  - event
+---
+apiVersion: industry-fusion.com/v1alpha2
+kind: BeamSqlTable
+metadata:
+  name: ngsild-updates
+spec:
+  name: ngsild_updates
+  connector: kafka
+  fields:
+  - op: STRING
+  - overwirteOrReplace: BOOLEAN
+  - noForward: BOOLEAN
+  - entities: STRING
+  kafka:
+    topic: '{{.Values.kafkaBridge.ngsildUpdates.listenTopic}}'
+    properties:
+      bootstrap.servers: '{{.Values.kafka.bootstrapServer}}'
+    scan.startup.mode: latest-offset
+  value:
+    format: json
+    json.fail-on-missing-field: false
+    json.ignore-parse-errors: true
+---
+apiVersion: industry-fusion.com/v1alpha2
+kind: BeamSqlTable
+metadata:
+  name: attributes
+spec:
+  name: attributes
+  connector: kafka
+  fields:
+  - id: STRING
+  - parentId: STRING
+  - entityId: STRING
+  - name: STRING
+  - nodeType: STRING
+  - valueType: STRING
+  - type: STRING
+  - attributeValue: STRING
+  - datasetId: STRING
+  - unitCode: STRING
+  - lang: STRING
+  - deleted: BOOLEAN
+  - synced: BOOLEAN
+  - watermark: FOR `ts` AS `ts`
+  - ts: TIMESTAMP(3) METADATA FROM 'timestamp'
+  kafka:
+    topic: '{{.Values.kafkaBridge.debezium.attributesTopic}}'
+    properties:
+      bootstrap.servers: '{{.Values.kafka.bootstrapServer}}'
+    scan.startup.mode: latest-offset
+  value:
+    format: json
+    json.fail-on-missing-field: false
+    json.ignore-parse-errors: true
+---
+apiVersion: industry-fusion.com/v1alpha1
+kind: BeamSqlView
+metadata:
+  name: attributes-view
+spec:
+  name: attributes_view
+  sqlstatement: "SELECT `type`,\n `id`,\n `parentId`,\n `entityId`,\n `name`,\n `nodeType`,\n\
+    \ `valueType`,\n `attributeValue`,\n `datasetId`,\n `unitCode`,\n `lang`,\n `deleted`,\n\
+    \ `synced`,\n `ts` FROM (\n  SELECT *,\nROW_NUMBER() OVER (PARTITION BY `id`,\
+    \ `datasetId`\nORDER BY ts DESC) AS rownum\nFROM `attributes` )\nWHERE rownum\
+    \ = 1"
+---
+apiVersion: industry-fusion.com/v1alpha2
+kind: BeamSqlTable
+metadata:
+  name: attributes-insert
+spec:
+  name: attributes_insert
+  connector: upsert-kafka
+  fields:
+  - id: STRING
+  - parentId: STRING
+  - entityId: STRING
+  - name: STRING
+  - nodeType: STRING
+  - valueType: STRING
+  - type: STRING
+  - attributeValue: STRING
+  - datasetId: STRING
+  - unitCode: STRING
+  - lang: STRING
+  - deleted: BOOLEAN
+  - synced: BOOLEAN
+  kafka:
+    topic: '{{.Values.kafkaBridge.debezium.attributesTopic}}_insert'
+    properties:
+      bootstrap.servers: '{{.Values.kafka.bootstrapServer}}'
+    key.format: json
+  value:
+    format: json
+    json.fail-on-missing-field: false
+    json.ignore-parse-errors: true
+  primaryKey:
+  - id
+  - datasetId
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: iff.ngsild.entities.        attributes-insert
+  labels:
+    strimzi.io/cluster: my-cluster
+spec:
+  partitions: 1
+  replicas: 1
+  config:
+    retention.ms: '{{.Values.kafkaBridge.debezium.entityTopicRetention}}'
+  topicName: iff.ngsild.entities.        attributes_insert
+---
+apiVersion: industry-fusion.com/v1alpha2
+kind: BeamSqlTable
+metadata:
+  name: attributes-insert-filter
+spec:
+  name: attributes_insert_filter
+  connector: kafka
+  fields:
+  - id: STRING
+  - parentId: STRING
+  - entityId: STRING
+  - name: STRING
+  - nodeType: STRING
+  - valueType: STRING
+  - type: STRING
+  - attributeValue: STRING
+  - datasetId: STRING
+  - unitCode: STRING
+  - lang: STRING
+  - deleted: BOOLEAN
+  - synced: BOOLEAN
+  - ts: TIMESTAMP(3) METADATA FROM 'timestamp'
+  - watermark: FOR `ts` AS `ts`
+  kafka:
+    topic: '{{.Values.kafkaBridge.debezium.attributesTopic}}_insert'
+    properties:
+      bootstrap.servers: '{{.Values.kafka.bootstrapServer}}'
+    scan.startup.mode: latest-offset
+  value:
+    format: json
+    json.fail-on-missing-field: false
+    json.ignore-parse-errors: true
+---
+---
+apiVersion: industry-fusion.com/v1alpha2
+kind: BeamSqlTable
+metadata:
+  name: constraints
+spec:
+  name: constraints
+  connector: kafka
+  fields:
+  - id: STRING
+  - event: STRING
+  - environment: STRING
+  - service: ARRAY<STRING>
+  - severity: STRING
+  - customer: STRING
+  - text: STRING
+  kafka:
+    topic: '{{.Values.kafkaBridge.alerta.listenTopic}}'
+    properties:
+      bootstrap.servers: '{{.Values.kafka.bootstrapServer}}'
+    key.format: json
+  value:
+    format: json
+    json.fail-on-missing-field: false
+    json.ignore-parse-errors: true
+  primaryKey:
+  - resource
+  - event

@@ -1,0 +1,113 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: flink-job-runner
+  namespace: iff
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: flink-job-runner
+  template:
+    metadata:
+      labels:
+        app: flink-job-runner
+    spec:
+      serviceAccountName: flink-job-runner  # Create this ServiceAccount with appropriate permissions
+      containers:
+      - name: flink-job-runner
+        image: your-registry/flink-job-runner:latest
+        ports:
+        - containerPort: 8080
+        env:
+        - name: RUNNER_BIND
+          value: "0.0.0.0"
+        - name: RUNNER_PORT
+          value: "8080"
+        - name: DIGITALTWIN_ROOT
+          value: "/app/work/shacl2flink"
+        - name: WORK_ROOT
+          value: "/app/work"
+        # Use the default Kubernetes service account token location
+        - name: KUBECONFIG_PATH
+          value: "/var/run/secrets/kubernetes.io/serviceaccount"
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        volumeMounts:
+        # Optional: mount additional storage for work directory
+        - name: work-storage
+          mountPath: /app/work
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: work-storage
+        emptyDir:
+          sizeLimit: 10Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: flink-job-runner-service
+  namespace: iff
+spec:
+  selector:
+    app: flink-job-runner
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 8080
+  type: ClusterIP
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: flink-job-runner
+  namespace: iff
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: flink-job-runner
+rules:
+# Permissions needed for your make targets
+- apiGroups: [""]
+  resources: ["pods", "services", "endpoints", "secrets"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: ["apps"]
+  resources: ["deployments", "replicasets"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete", "scale"]
+- apiGroups: ["kafka.strimzi.io"]
+  resources: ["kafkatopics"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: ["extensions", "networking.k8s.io"]
+  resources: ["ingresses"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+# Add other resources as needed by your Makefile
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: flink-job-runner
+subjects:
+- kind: ServiceAccount
+  name: flink-job-runner
+  namespace: iff
+roleRef:
+  kind: ClusterRole
+  name: flink-job-runner
+  apiGroup: rbac.authorization.k8s.io

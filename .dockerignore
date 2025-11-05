@@ -1,0 +1,64 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+env
+pip-log.txt
+pip-delete-this-directory.txt
+.tox
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.log
+.git
+.mypy_cache
+.pytest_cache
+.hypothesis
+
+# Virtual environments
+.venv
+venv/
+ENV/
+env/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+
+# Work directories (will be created in container, but include requirements)
+work/*/
+!work/shacl2flink/
+!work/helm/
+# Make sure we include requirements files
+!work/shacl2flink/requirements*.txt
+
+# Secrets (will be mounted in Kubernetes)
+secrets/kubeconfig
+
+# Logs
+*.log
+
+# Temporary files
+tmp/
+temp/
