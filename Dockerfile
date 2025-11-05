@@ -42,13 +42,6 @@ RUN curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/s
 # Install Helm diff plugin
 RUN helm plugin install https://github.com/databus23/helm-diff
 
-# Install helmfile
-RUN wget https://github.com/helmfile/helmfile/releases/download/v0.158.1/helmfile_0.158.1_linux_amd64.tar.gz \
-    && tar -xzf helmfile_0.158.1_linux_amd64.tar.gz helmfile \
-    && chmod +x helmfile \
-    && mv helmfile /usr/local/bin/ \
-    && rm helmfile_0.158.1_linux_amd64.tar.gz
-
 # Create app user (security best practice)
 RUN useradd -m -u 1000 appuser
 
@@ -65,8 +58,17 @@ RUN pip install --no-cache-dir -r shacl2flink/requirements.txt -r shacl2flink/re
 COPY . .
 
 # Create necessary directories
-RUN mkdir -p work/kms work/helm secrets \
-    && chown -R appuser:appuser /app
+RUN mkdir -p work/kms work/helm secrets
+
+# Install helmfile in the helm directory
+RUN wget https://github.com/helmfile/helmfile/releases/download/v0.158.1/helmfile_0.158.1_linux_amd64.tar.gz \
+    && tar -xzf helmfile_0.158.1_linux_amd64.tar.gz helmfile \
+    && chmod +x helmfile \
+    && mv helmfile /app/work/helm/ \
+    && rm helmfile_0.158.1_linux_amd64.tar.gz
+
+# Set ownership
+RUN chown -R appuser:appuser /app
 
 # Switch to non-root user
 USER appuser
