@@ -46,31 +46,24 @@ spec:
           chown -R 1000:1000 /mounted-work
           chmod -R 755 /mounted-work
 
-          # Create compatibility symlinks in /app so code that references /app/kms or /app/helm still works
-          echo "Creating compatibility symlinks..."
-          # remove existing symlinks or files if they exist and are wrong
-          if [ -e "/app/kms" ] && [ ! -L "/app/kms" ]; then
-            rm -rf /app/kms || true
+          # Update compatibility symlinks to point to mounted volume
+          echo "Updating compatibility symlinks..."
+          
+          # Remove existing symlinks (they point to /app/work/* but we need /app/work to be the mounted volume)
+          rm -f /app/kms /app/helm /app/shacl2flink || true
+          
+          # Create new symlinks pointing to the mounted volume paths
+          if [ -d "/mounted-work/kms" ]; then
+            ln -sf /app/work/kms /app/kms
+            echo "Linked /app/kms -> /app/work/kms (mounted volume)"
           fi
-          if [ -e "/app/helm" ] && [ ! -L "/app/helm" ]; then
-            rm -rf /app/helm || true
+          if [ -d "/mounted-work/helm" ]; then
+            ln -sf /app/work/helm /app/helm
+            echo "Linked /app/helm -> /app/work/helm (mounted volume)"
           fi
-          if [ -e "/app/shacl2flink" ] && [ ! -L "/app/shacl2flink" ]; then
-            rm -rf /app/shacl2flink || true
-          fi
-
-          # Create symlinks pointing to the mounted workload
-          if [ -d "/mounted-work/kms" ] && [ ! -L "/app/kms" ]; then
-            ln -s /mounted-work/kms /app/kms
-            echo "Linked /app/kms -> /mounted-work/kms"
-          fi
-          if [ -d "/mounted-work/helm" ] && [ ! -L "/app/helm" ]; then
-            ln -s /mounted-work/helm /app/helm
-            echo "Linked /app/helm -> /mounted-work/helm"
-          fi
-          if [ -d "/mounted-work/shacl2flink" ] && [ ! -L "/app/shacl2flink" ]; then
-            ln -s /mounted-work/shacl2flink /app/shacl2flink
-            echo "Linked /app/shacl2flink -> /mounted-work/shacl2flink"
+          if [ -d "/mounted-work/shacl2flink" ]; then
+            ln -sf /app/work/shacl2flink /app/shacl2flink
+            echo "Linked /app/shacl2flink -> /app/work/shacl2flink (mounted volume)"
           fi
 
           # Show final layout

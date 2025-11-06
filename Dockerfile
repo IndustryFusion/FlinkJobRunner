@@ -64,6 +64,13 @@ RUN echo "Verifying work directory structure:" \
     && ls -la work/shacl2flink/ || echo "No shacl2flink directory" \
     && ls -la work/helm/ || echo "No helm directory"
 
+# Create compatibility symlinks so scripts can access /app/kms, /app/helm, etc.
+RUN ln -sf /app/work/kms /app/kms \
+    && ln -sf /app/work/helm /app/helm \
+    && ln -sf /app/work/shacl2flink /app/shacl2flink \
+    && echo "Created symlinks:" \
+    && ls -la /app/kms /app/helm /app/shacl2flink
+
 # Create secrets directory and set permissions (work dirs already copied above)
 RUN mkdir -p secrets \
     && chmod -R 755 work secrets
