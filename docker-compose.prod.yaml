@@ -1,0 +1,11 @@
+version: '3.7'
+
+services:
+  flink-job-runner-backend:
+    image: ${DOCKER_PREFIX:-ibn40}/flink-job-runner-backend:${DOCKER_TAG:-latest}
+    build:
+      context: .
+      args:
+        ENV: prod
+    ports:
+    - "8080:8080"
