@@ -16,7 +16,7 @@ spec:
       serviceAccountName: flink-job-runner  # Create this ServiceAccount with appropriate permissions
       containers:
       - name: flink-job-runner
-        image: your-registry/flink-job-runner:latest
+        image: ibn40/flink-job-runner:latest
         ports:
         - containerPort: 8080
         env:
