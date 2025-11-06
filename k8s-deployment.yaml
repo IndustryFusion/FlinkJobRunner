@@ -69,8 +69,18 @@ spec:
           # Show final layout
           echo "Final mounted work directory structure:"
           ls -la /mounted-work/ || echo "No mounted work directory"
+          echo "Contents of /mounted-work/kms/:"
+          ls -la /mounted-work/kms/ || echo "No kms directory in mounted work"
+          echo "Contents of /mounted-work/shacl2flink/:"
+          ls -la /mounted-work/shacl2flink/ || echo "No shacl2flink directory in mounted work"
+          echo "Contents of /mounted-work/helm/:"
+          ls -la /mounted-work/helm/ || echo "No helm directory in mounted work"
           echo "Final /app layout (top-level):"
           ls -la /app | sed -n '1,120p' || true
+          echo "Testing symlinks:"
+          ls -la /app/kms/ || echo "Cannot access /app/kms"
+          ls -la /app/helm/ || echo "Cannot access /app/helm"
+          ls -la /app/shacl2flink/ || echo "Cannot access /app/shacl2flink"
           echo "Setup complete"
         volumeMounts:
         - name: work-storage

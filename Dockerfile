@@ -60,8 +60,11 @@ COPY . .
 # Verify work directory structure was copied correctly
 RUN echo "Verifying work directory structure:" \
     && ls -la work/ || echo "No work directory" \
+    && echo "Contents of work/kms/:" \
     && ls -la work/kms/ || echo "No kms directory" \
+    && echo "Contents of work/shacl2flink/:" \
     && ls -la work/shacl2flink/ || echo "No shacl2flink directory" \
+    && echo "Contents of work/helm/:" \
     && ls -la work/helm/ || echo "No helm directory"
 
 # Create compatibility symlinks so scripts can access /app/kms, /app/helm, etc.
