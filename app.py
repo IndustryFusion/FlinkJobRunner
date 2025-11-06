@@ -447,16 +447,6 @@ def cancel_job(job_id: str):
             abort(500, "Failed to cancel")
     return jsonify({"jobId": job_id, "status": job.status})
 
-# Health
-@app.route("/healthz", methods=["GET"])
-def health():
-    # Check if essential directories exist
-    digitaltwin_ok = Path(DIGITALTWIN_ROOT).exists()
-    # For Kubernetes pods, kubeconfig might not exist (using in-cluster auth)
-    kubeconfig_ok = not KUBECONFIG_PATH or Path(KUBECONFIG_PATH).exists()
-    ok = digitaltwin_ok and kubeconfig_ok
-    return ("ok", 200) if ok else ("bad", 500)
-
 # Add request logging middleware
 @app.before_request
 def log_request_info():
