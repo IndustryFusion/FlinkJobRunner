@@ -218,8 +218,10 @@ def run_tool(job: JobState, target: str, env: dict):
 def start_job_thread(job: JobState, target: str, kube_context: Optional[str]):
     # Prepare ENV for the tool
     env = os.environ.copy()
-    # Only set KUBECONFIG if path is provided and exists (for local development)
-    if KUBECONFIG_PATH and Path(KUBECONFIG_PATH).exists():
+    # Only set KUBECONFIG if path is provided and is a file (for local development).
+    # In-cluster service account mounts a directory at /var/run/secrets/kubernetes.io/serviceaccount
+    # which is NOT a kubeconfig file; avoid setting KUBECONFIG to a directory to prevent kubectl errors.
+    if KUBECONFIG_PATH and Path(KUBECONFIG_PATH).is_file():
         env["KUBECONFIG"] = str(KUBECONFIG_PATH)
     # For Kubernetes pods, kubectl will use in-cluster authentication automatically
     if kube_context:
