@@ -57,8 +57,8 @@ RUN pip install --no-cache-dir -r shacl2flink/requirements.txt -r shacl2flink/re
 # Copy application code
 COPY . .
 
-# Create necessary directories with proper permissions
-RUN mkdir -p work/kms work/helm secrets \
+# Create secrets directory and set permissions (work dirs already copied above)
+RUN mkdir -p secrets \
     && chmod -R 755 work secrets
 
 # Install helmfile in the helm directory

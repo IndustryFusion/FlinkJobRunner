@@ -17,19 +17,42 @@ spec:
     spec:
       serviceAccountName: flink-job-runner  # Create this ServiceAccount with appropriate permissions
       initContainers:
-      - name: fix-permissions
-        image: busybox:1.35
+      - name: setup-work-directory
+        image: ibn40/flink-job-runner:latest
         command:
         - sh
         - -c
         - |
-          echo "Fixing permissions for /app/work..."
-          chown -R 1000:1000 /app/work
-          chmod -R 755 /app/work
-          echo "Permissions fixed"
+          echo "Setting up work directory structure..."
+          
+          # List what's available in the image
+          echo "Available directories in /app/work:"
+          ls -la /app/work/ || echo "No /app/work directory found"
+          
+          # Copy all work subdirectories from image to mounted volume if they don't exist
+          for dir in shacl2flink helm kms; do
+            if [ -d "/app/work/$dir" ] && [ ! -d "/mounted-work/$dir" ]; then
+              echo "Copying $dir directory to mounted volume..."
+              cp -r "/app/work/$dir" "/mounted-work/"
+            elif [ -d "/mounted-work/$dir" ]; then
+              echo "$dir directory already exists in mounted volume"
+            else
+              echo "Warning: $dir directory not found in image"
+            fi
+          done
+          
+          # Fix permissions
+          echo "Fixing permissions for /mounted-work..."
+          chown -R 1000:1000 /mounted-work
+          chmod -R 755 /mounted-work
+          
+          # List final structure
+          echo "Final mounted work directory structure:"
+          ls -la /mounted-work/ || echo "No mounted work directory"
+          echo "Setup complete"
         volumeMounts:
         - name: work-storage
-          mountPath: /app/work
+          mountPath: /mounted-work
         securityContext:
           runAsUser: 0  # Run as root to fix permissions
       containers:
