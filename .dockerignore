@@ -46,16 +46,6 @@ dist/
 build/
 *.egg-info/
 
-# Work directories (will be created in container, but include requirements)
-work/*/
-!work/shacl2flink/
-!work/helm/
-!work/kms/
-# Make sure we include requirements files
-!work/shacl2flink/requirements*.txt
-
-# Secrets (will be mounted in Kubernetes)
-secrets/kubeconfig
 
 # Logs
 *.log
