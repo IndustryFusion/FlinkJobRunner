@@ -184,6 +184,9 @@ rules:
 - apiGroups: ["apps"]
   resources: ["deployments", "replicasets", "statefulsets", "daemonsets"]
   verbs: ["get", "list", "watch", "create", "update", "patch", "delete", "scale"]
+- apiGroups: ["apps"]
+  resources: ["deployments/scale", "replicasets/scale", "statefulsets/scale"]
+  verbs: ["get", "update", "patch"]
 # Batch resources (for Jobs/CronJobs)
 - apiGroups: ["batch"]
   resources: ["jobs", "cronjobs"]
