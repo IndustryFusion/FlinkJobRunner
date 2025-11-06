@@ -212,6 +212,10 @@ rules:
 - apiGroups: ["apiextensions.k8s.io"]
   resources: ["customresourcedefinitions"]
   verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+# Industry Fusion custom resources
+- apiGroups: ["industry-fusion.com"]
+  resources: ["beamsqlstatementsets"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
 # Add other resources as needed by your Makefile
 ---
 apiVersion: rbac.authorization.k8s.io/v1
