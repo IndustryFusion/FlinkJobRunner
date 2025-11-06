@@ -28,10 +28,14 @@ spec:
           # List what's available in the image
           echo "Available directories in /app/work:"
           ls -la /app/work/ || echo "No /app/work directory found"
+          echo "Files in /app/work/kms/ from image:"
+          ls -la /app/work/kms/ || echo "No kms directory in image"
+          echo "Files in /app/work/shacl2flink/ from image:"
+          ls -la /app/work/shacl2flink/ || echo "No shacl2flink directory in image"
 
           # Copy entire work directory structure from image to mounted volume (best effort)
           echo "Copying work directory contents to mounted volume..."
-          cp -r /app/work/* /mounted-work/ 2>/dev/null || echo "Some files may not exist"
+          cp -rv /app/work/* /mounted-work/ 2>&1 || echo "Some files may not exist"
 
           # Ensure specific directories exist and copy them if needed
           for dir in shacl2flink helm kms; do
