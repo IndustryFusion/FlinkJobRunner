@@ -29,15 +29,15 @@ spec:
           echo "Available directories in /app/work:"
           ls -la /app/work/ || echo "No /app/work directory found"
           
-          # Copy all work subdirectories from image to mounted volume if they don't exist
+          # Copy entire work directory structure from image to mounted volume
+          echo "Copying work directory contents to mounted volume..."
+          cp -r /app/work/* /mounted-work/ 2>/dev/null || echo "Some files may not exist"
+          
+          # Ensure specific directories exist and copy them if needed
           for dir in shacl2flink helm kms; do
             if [ -d "/app/work/$dir" ] && [ ! -d "/mounted-work/$dir" ]; then
               echo "Copying $dir directory to mounted volume..."
               cp -r "/app/work/$dir" "/mounted-work/"
-            elif [ -d "/mounted-work/$dir" ]; then
-              echo "$dir directory already exists in mounted volume"
-            else
-              echo "Warning: $dir directory not found in image"
             fi
           done
           
@@ -46,9 +46,15 @@ spec:
           chown -R 1000:1000 /mounted-work
           chmod -R 755 /mounted-work
           
-          # List final structure
+          # List final structure  
           echo "Final mounted work directory structure:"
           ls -la /mounted-work/ || echo "No mounted work directory"
+          echo "Files in kms directory:"
+          ls -la /mounted-work/kms/ || echo "No kms directory"
+          echo "Files in shacl2flink directory:"
+          ls -la /mounted-work/shacl2flink/ || echo "No shacl2flink directory"
+          echo "Files in helm directory:"
+          ls -la /mounted-work/helm/ || echo "No helm directory"
           echo "Setup complete"
         volumeMounts:
         - name: work-storage

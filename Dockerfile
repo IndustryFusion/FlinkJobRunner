@@ -57,6 +57,13 @@ RUN pip install --no-cache-dir -r shacl2flink/requirements.txt -r shacl2flink/re
 # Copy application code
 COPY . .
 
+# Verify work directory structure was copied correctly
+RUN echo "Verifying work directory structure:" \
+    && ls -la work/ || echo "No work directory" \
+    && ls -la work/kms/ || echo "No kms directory" \
+    && ls -la work/shacl2flink/ || echo "No shacl2flink directory" \
+    && ls -la work/helm/ || echo "No helm directory"
+
 # Create secrets directory and set permissions (work dirs already copied above)
 RUN mkdir -p secrets \
     && chmod -R 755 work secrets
