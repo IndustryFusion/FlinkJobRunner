@@ -24,15 +24,15 @@ spec:
         - -c
         - |
           echo "Setting up work directory structure..."
-          
+
           # List what's available in the image
           echo "Available directories in /app/work:"
           ls -la /app/work/ || echo "No /app/work directory found"
-          
-          # Copy entire work directory structure from image to mounted volume
+
+          # Copy entire work directory structure from image to mounted volume (best effort)
           echo "Copying work directory contents to mounted volume..."
           cp -r /app/work/* /mounted-work/ 2>/dev/null || echo "Some files may not exist"
-          
+
           # Ensure specific directories exist and copy them if needed
           for dir in shacl2flink helm kms; do
             if [ -d "/app/work/$dir" ] && [ ! -d "/mounted-work/$dir" ]; then
@@ -40,21 +40,44 @@ spec:
               cp -r "/app/work/$dir" "/mounted-work/"
             fi
           done
-          
-          # Fix permissions
+
+          # Fix permissions on the mounted volume
           echo "Fixing permissions for /mounted-work..."
           chown -R 1000:1000 /mounted-work
           chmod -R 755 /mounted-work
-          
-          # List final structure  
+
+          # Create compatibility symlinks in /app so code that references /app/kms or /app/helm still works
+          echo "Creating compatibility symlinks..."
+          # remove existing symlinks or files if they exist and are wrong
+          if [ -e "/app/kms" ] && [ ! -L "/app/kms" ]; then
+            rm -rf /app/kms || true
+          fi
+          if [ -e "/app/helm" ] && [ ! -L "/app/helm" ]; then
+            rm -rf /app/helm || true
+          fi
+          if [ -e "/app/shacl2flink" ] && [ ! -L "/app/shacl2flink" ]; then
+            rm -rf /app/shacl2flink || true
+          fi
+
+          # Create symlinks pointing to the mounted workload
+          if [ -d "/mounted-work/kms" ] && [ ! -L "/app/kms" ]; then
+            ln -s /mounted-work/kms /app/kms
+            echo "Linked /app/kms -> /mounted-work/kms"
+          fi
+          if [ -d "/mounted-work/helm" ] && [ ! -L "/app/helm" ]; then
+            ln -s /mounted-work/helm /app/helm
+            echo "Linked /app/helm -> /mounted-work/helm"
+          fi
+          if [ -d "/mounted-work/shacl2flink" ] && [ ! -L "/app/shacl2flink" ]; then
+            ln -s /mounted-work/shacl2flink /app/shacl2flink
+            echo "Linked /app/shacl2flink -> /mounted-work/shacl2flink"
+          fi
+
+          # Show final layout
           echo "Final mounted work directory structure:"
           ls -la /mounted-work/ || echo "No mounted work directory"
-          echo "Files in kms directory:"
-          ls -la /mounted-work/kms/ || echo "No kms directory"
-          echo "Files in shacl2flink directory:"
-          ls -la /mounted-work/shacl2flink/ || echo "No shacl2flink directory"
-          echo "Files in helm directory:"
-          ls -la /mounted-work/helm/ || echo "No helm directory"
+          echo "Final /app layout (top-level):"
+          ls -la /app | sed -n '1,120p' || true
           echo "Setup complete"
         volumeMounts:
         - name: work-storage

@@ -50,6 +50,7 @@ build/
 work/*/
 !work/shacl2flink/
 !work/helm/
+!work/kms/
 # Make sure we include requirements files
 !work/shacl2flink/requirements*.txt
 
