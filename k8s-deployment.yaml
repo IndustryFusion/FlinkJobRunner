@@ -16,6 +16,22 @@ spec:
         app: flink-job-runner
     spec:
       serviceAccountName: flink-job-runner  # Create this ServiceAccount with appropriate permissions
+      initContainers:
+      - name: fix-permissions
+        image: busybox:1.35
+        command:
+        - sh
+        - -c
+        - |
+          echo "Fixing permissions for /app/work..."
+          chown -R 1000:1000 /app/work
+          chmod -R 755 /app/work
+          echo "Permissions fixed"
+        volumeMounts:
+        - name: work-storage
+          mountPath: /app/work
+        securityContext:
+          runAsUser: 0  # Run as root to fix permissions
       containers:
       - name: flink-job-runner
         image: ibn40/flink-job-runner:latest
@@ -44,6 +60,10 @@ spec:
         # Optional: mount additional storage for work directory
         - name: work-storage
           mountPath: /app/work
+        securityContext:
+          runAsUser: 1000  # Run as appuser
+          runAsGroup: 1000
+          allowPrivilegeEscalation: false
       volumes:
       - name: work-storage
         persistentVolumeClaim:

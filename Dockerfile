@@ -57,8 +57,9 @@ RUN pip install --no-cache-dir -r shacl2flink/requirements.txt -r shacl2flink/re
 # Copy application code
 COPY . .
 
-# Create necessary directories
-RUN mkdir -p work/kms work/helm secrets
+# Create necessary directories with proper permissions
+RUN mkdir -p work/kms work/helm secrets \
+    && chmod -R 755 work secrets
 
 # Install helmfile in the helm directory
 RUN wget https://github.com/helmfile/helmfile/releases/download/v0.158.1/helmfile_0.158.1_linux_amd64.tar.gz \
@@ -67,8 +68,9 @@ RUN wget https://github.com/helmfile/helmfile/releases/download/v0.158.1/helmfil
     && mv helmfile /app/work/helm/ \
     && rm helmfile_0.158.1_linux_amd64.tar.gz
 
-# Set ownership
-RUN chown -R appuser:appuser /app
+# Set ownership and ensure write permissions
+RUN chown -R appuser:appuser /app \
+    && chmod -R u+w /app/work
 
 # Switch to non-root user
 USER appuser
