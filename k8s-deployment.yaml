@@ -56,8 +56,25 @@ spec:
           periodSeconds: 5
       volumes:
       - name: work-storage
-        emptyDir:
-          sizeLimit: 10Gi
+        persistentVolumeClaim:
+          claimName: flink-job-runner-pvc
+
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: flink-job-runner-pvc
+  namespace: iff
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 20Gi
+
+
 ---
 apiVersion: v1
 kind: Service

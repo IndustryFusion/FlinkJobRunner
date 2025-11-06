@@ -81,10 +81,6 @@ RUN echo ".headers on" > ~/.sqliterc \
 # Expose port
 EXPOSE 8080
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8080/healthz || exit 1
-
 # Environment variables with defaults
 ENV RUNNER_BIND=0.0.0.0
 ENV RUNNER_PORT=8080

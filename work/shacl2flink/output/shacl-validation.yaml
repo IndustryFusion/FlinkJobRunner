@@ -4,17 +4,17 @@ metadata:
   name: shacl-validation
 spec:
   tables:
-  - constraint-trigger-table
-  - constraint-combination-table
   - attributes
-  - alerts-bulk
-  - constraint-table
-  - entities
   - attributes-insert
+  - entities
   - rdf
+  - constraint-table
+  - constraint-trigger-table
+  - alerts-bulk
+  - constraint-combination-table
   views:
-  - attributes-view
   - entities-view
+  - attributes-view
   sqlsettings:
   - table.exec.sink.upsert-materialize: none
   - execution.savepoint.ignore-unclaimed-state: 'true'

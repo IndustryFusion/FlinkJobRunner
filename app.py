@@ -5,11 +5,16 @@ import time
 import queue
 import subprocess
 import shutil
+import logging
 from pathlib import Path
 from typing import Dict, Optional
 from flask import Flask, request, jsonify, Response, abort
 import requests
 from alerts_shacl import bp as alerts_shacl_bp
+
+# Set up logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
     
 # ========= Config =========
 RUNNER_BIND = os.getenv("RUNNER_BIND", "0.0.0.0")
@@ -50,11 +55,55 @@ class JobState:
         self._log_q: "queue.Queue[str]" = queue.Queue()
 
     def set_status(self, s: str):
+        old_status = self.status
         self.status = s
         self.updated_at = time.time()
+        logger.info(f"Job {self.job_id} status changed: {old_status} -> {s}")
 
 JOBS: Dict[str, JobState] = {}
 JOBS_LOCK = threading.Lock()
+
+def recover_jobs_from_disk():
+    """Recover jobs from existing work directories on startup"""
+    if not WORK_ROOT.exists():
+        return
+    
+    recovered_count = 0
+    for item in WORK_ROOT.iterdir():
+        if item.is_dir() and item.name not in ["kms", "helm", "shacl2flink"]:
+            # This looks like a job directory
+            try:
+                job_id = item.name
+                log_file = item / "runner.log"
+                job_meta_file = item / "job.json"
+                
+                if log_file.exists() or job_meta_file.exists():
+                    logger.info(f"Recovering job {job_id} from disk")
+                    job = JobState(job_id)
+                    
+                    # Try to determine status from log file
+                    if log_file.exists():
+                        try:
+                            with open(log_file, 'r') as f:
+                                last_lines = f.readlines()[-10:]  # Read last 10 lines
+                                if any("finished successfully" in line for line in last_lines):
+                                    job.set_status("SUCCEEDED")
+                                elif any("failed with exit code" in line for line in last_lines):
+                                    job.set_status("FAILED")
+                                else:
+                                    job.set_status("UNKNOWN")
+                        except Exception as e:
+                            logger.warning(f"Could not read log file for job {job_id}: {e}")
+                            job.set_status("UNKNOWN")
+                    else:
+                        job.set_status("UNKNOWN")
+                    
+                    JOBS[job_id] = job
+                    recovered_count += 1
+            except Exception as e:
+                logger.warning(f"Could not recover job from directory {item.name}: {e}")
+    
+    logger.info(f"Recovered {recovered_count} jobs from disk")
 
 # ========= Utilities =========
 
@@ -82,7 +131,7 @@ def sse_format(event: Optional[str], data: str) -> str:
         out += f"data: {line}\n"
     return out + "\n"
 
-def tail_file(path: Path, start_at_end=False):
+def tail_file(path: Path, start_at_end=False, replay_only=False):
     with open(path, "a+", buffering=1) as f:
         f.flush()
     with open(path, "r", buffering=1) as f:
@@ -91,6 +140,9 @@ def tail_file(path: Path, start_at_end=False):
         while True:
             line = f.readline()
             if not line:
+                if replay_only:
+                    # For replay mode, stop when we reach EOF
+                    break
                 time.sleep(0.2)
                 continue
             yield line.rstrip("\n")
@@ -99,6 +151,8 @@ def append_log(job: JobState, text: str):
     job.log_path.parent.mkdir(parents=True, exist_ok=True)
     with open(job.log_path, "a", buffering=1) as f:
         f.write(text.rstrip("\n") + "\n")
+    # Also log to console for debugging
+    logger.debug(f"Job {job.job_id} log: {text}")
 
 def stream_subprocess_logs(proc: subprocess.Popen, job: JobState):
     # Read stdout and stderr, write to file & queue for live subscribers
@@ -209,17 +263,25 @@ def create_job():
     context = data.get("context") or {}
     kube_context = context.get("kubeContext")
 
+    logger.info(f"Creating job {job_id} with target '{target}', knowledge_url: {knowledge_url[:50]}..., shacl_url: {shacl_url[:50]}...")
+
     # Validate
     if not knowledge_url or not shacl_url:
+        logger.error(f"Job {job_id} validation failed: missing URLs")
         abort(400, "urls.knowledge and urls.shacl are required")
     if ALLOWED_TARGETS and target not in ALLOWED_TARGETS:
+        logger.error(f"Job {job_id} validation failed: target '{target}' not in allowed targets: {ALLOWED_TARGETS}")
         abort(400, f"target '{target}' not allowed")
 
     with JOBS_LOCK:
-        if job_id in JOBS and JOBS[job_id].status in ("QUEUED", "RUNNING"):
-            return jsonify({"jobId": job_id, "status": JOBS[job_id].status}), 202
+        if job_id in JOBS:
+            existing_job = JOBS[job_id]
+            logger.info(f"Job {job_id} already exists with status: {existing_job.status}")
+            if existing_job.status in ("QUEUED", "RUNNING"):
+                return jsonify({"jobId": job_id, "status": existing_job.status}), 202
         job = JobState(job_id)
         JOBS[job_id] = job
+        logger.info(f"Created new job {job_id}, total jobs in memory: {len(JOBS)}")
 
     # Prepare work folder and inputs
     try:
@@ -264,13 +326,67 @@ def create_job():
 
     return jsonify({"jobId": job_id, "status": job.status})
 
+@app.route("/jobs", methods=["GET"])
+def list_jobs():
+    """List all jobs for debugging"""
+    with JOBS_LOCK:
+        job_list = []
+        for job_id, job in JOBS.items():
+            job_list.append({
+                "jobId": job.job_id,
+                "status": job.status,
+                "createdAt": job.created_at,
+                "updatedAt": job.updated_at,
+                "lastError": job.last_error,
+                "logPathExists": job.log_path.exists() if job.log_path else False,
+                "workDirExists": job.work_dir.exists() if job.work_dir else False,
+            })
+    logger.info(f"Listing {len(job_list)} jobs")
+    return jsonify({"jobs": job_list, "count": len(job_list)})
+
+@app.route("/debug/job/<job_id>", methods=["GET"])
+def debug_job(job_id: str):
+    """Debug endpoint to check job existence and details"""
+    with JOBS_LOCK:
+        job_exists = job_id in JOBS
+        all_job_ids = list(JOBS.keys())
+        
+    logger.info(f"Debug request for job {job_id}: exists={job_exists}")
+    logger.info(f"All jobs in memory: {all_job_ids}")
+    
+    result = {
+        "requestedJobId": job_id,
+        "jobExists": job_exists,
+        "totalJobsInMemory": len(all_job_ids),
+        "allJobIds": all_job_ids
+    }
+    
+    if job_exists:
+        with JOBS_LOCK:
+            job = JOBS[job_id]
+            result.update({
+                "status": job.status,
+                "createdAt": job.created_at,
+                "updatedAt": job.updated_at,
+                "logPath": str(job.log_path),
+                "logPathExists": job.log_path.exists(),
+                "workDir": str(job.work_dir),
+                "workDirExists": job.work_dir.exists(),
+                "queueSize": job._log_q.qsize(),
+                "lastError": job.last_error
+            })
+    
+    return jsonify(result)
+
 @app.route("/jobs/<job_id>", methods=["GET"])
 def get_job(job_id: str):
     with JOBS_LOCK:
         job = JOBS.get(job_id)
     if not job:
+        logger.warning(f"Job {job_id} not found")
         abort(404, "Job not found")
 
+    logger.info(f"Getting job {job_id} details, status: {job.status}")
     return jsonify({
         "jobId": job.job_id,
         "status": job.status,
@@ -282,50 +398,33 @@ def get_job(job_id: str):
     })
 
 @app.route("/jobs/<job_id>/logs", methods=["GET"])
-def stream_logs(job_id: str):
+def get_logs(job_id: str):
     """
-    Server-Sent Events (SSE)
-    - Sends historical lines (tail -f behavior from file)
-    - Then pushes new lines written by the subprocess
+    Return the complete log file content as plain text
     """
     with JOBS_LOCK:
         job = JOBS.get(job_id)
-    if not job:
-        abort(404, "Job not found")
-
-    def gen():
-        # send a hello/ping so client knows stream is open
-        yield sse_format("hello", f"stream-start job={job_id}")
-
-        # 1) Replay existing file contents from the start
-        if job.log_path.exists():
-            for line in tail_file(job.log_path, start_at_end=False):
-                yield sse_format(None, line)
-                # break as soon as we hit EOF once for initial replay
-                if not line:
-                    break
-
-        # 2) Live updates via queue (producer writes lines there)
-        # also tail the file end, as a fallback if queue is quiet
-        last_heartbeat = time.time()
-        while True:
-            try:
-                line = job._log_q.get(timeout=1.0)
-                yield sse_format(None, line)
-            except queue.Empty:
-                # periodic heartbeat to keep proxies alive
-                now = time.time()
-                if now - last_heartbeat > 15:
-                    last_heartbeat = now
-                    yield sse_format("ping", "keep-alive")
-
-            # Stop streaming shortly after terminal status (but keep a short tail time)
-            if job.status in ("SUCCEEDED", "FAILED"):
-                # send a final event and end
-                yield sse_format("done", job.status)
-                break
-
-    return Response(gen(), mimetype="text/event-stream")
+        all_job_ids = list(JOBS.keys())
+    
+    # Try to find log file even if job not in memory
+    log_path = WORK_ROOT / job_id / "runner.log"
+    
+    if not log_path.exists():
+        if job:
+            logger.error(f"Log file {log_path} does not exist for job {job_id}")
+        else:
+            logger.error(f"Job {job_id} not found and no log file. Available jobs: {all_job_ids}")
+        return Response(f"Log file not found for job {job_id}", mimetype="text/plain", status=404)
+    
+    logger.info(f"Serving log file for job {job_id}")
+    
+    try:
+        with open(log_path, 'r') as f:
+            content = f.read()
+        return Response(content, mimetype="text/plain")
+    except Exception as e:
+        logger.error(f"Error reading log file {log_path}: {e}")
+        return Response(f"Error reading log file: {e}", mimetype="text/plain", status=500)
 
 @app.route("/jobs/<job_id>/cancel", methods=["POST"])
 def cancel_job(job_id: str):
@@ -358,7 +457,29 @@ def health():
     ok = digitaltwin_ok and kubeconfig_ok
     return ("ok", 200) if ok else ("bad", 500)
 
+# Add request logging middleware
+@app.before_request
+def log_request_info():
+    logger.info(f"Request: {request.method} {request.path} - Query: {request.query_string.decode()} - Headers: {dict(request.headers)}")
+
+# Catch-all route for debugging unknown requests
+@app.route('/<path:path>', methods=['GET', 'POST', 'PUT', 'DELETE', 'PATCH'])
+def catch_all(path):
+    logger.warning(f"404 - Unknown endpoint: {request.method} /{path} - Query: {request.query_string.decode()}")
+    logger.warning(f"Request headers: {dict(request.headers)}")
+    logger.warning(f"Remote addr: {request.remote_addr}")
+    return jsonify({"error": "Endpoint not found", "path": f"/{path}", "method": request.method}), 404
+
 if __name__ == "__main__":
     WORK_ROOT.mkdir(parents=True, exist_ok=True)
-    app.run(host=RUNNER_BIND, port=RUNNER_PORT, threaded=True)
+    logger.info(f"Starting FlinkJobRunner on {RUNNER_BIND}:{RUNNER_PORT}")
+    logger.info(f"DIGITALTWIN_ROOT: {DIGITALTWIN_ROOT}")
+    logger.info(f"WORK_ROOT: {WORK_ROOT}")
+    logger.info(f"KUBECONFIG_PATH: {KUBECONFIG_PATH}")
+    logger.info(f"ALLOWED_TARGETS: {ALLOWED_TARGETS}")
+    
+    # Recover existing jobs from disk
+    recover_jobs_from_disk()
+    
     print(f"Runner listening on {RUNNER_BIND}:{RUNNER_PORT}")
+    app.run(host=RUNNER_BIND, port=RUNNER_PORT, threaded=True, debug=False)
