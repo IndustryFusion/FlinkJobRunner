@@ -5,6 +5,8 @@ metadata:
   namespace: iff
 spec:
   replicas: 1
+  strategy:
+    type: Recreate  # This ensures old pod is terminated before new one starts
   selector:
     matchLabels:
       app: flink-job-runner
@@ -42,18 +44,6 @@ spec:
         # Optional: mount additional storage for work directory
         - name: work-storage
           mountPath: /app/work
-        livenessProbe:
-          httpGet:
-            path: /healthz
-            port: 8080
-          initialDelaySeconds: 30
-          periodSeconds: 10
-        readinessProbe:
-          httpGet:
-            path: /healthz
-            port: 8080
-          initialDelaySeconds: 5
-          periodSeconds: 5
       volumes:
       - name: work-storage
         persistentVolumeClaim:
