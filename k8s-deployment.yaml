@@ -214,7 +214,7 @@ rules:
   verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
 # Industry Fusion custom resources
 - apiGroups: ["industry-fusion.com"]
-  resources: ["beamsqlstatementsets"]
+  resources: ["beamsqlstatementsets", "beamsqltables", "beamsqlviews", "flinkpythonudfs", "beamservices"]
   verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
 # Add other resources as needed by your Makefile
 ---
