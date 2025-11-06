@@ -39,9 +39,6 @@ RUN curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/s
     && ./get_helm.sh \
     && rm get_helm.sh
 
-# Install Helm diff plugin
-RUN helm plugin install https://github.com/databus23/helm-diff
-
 # Create app user (security best practice)
 RUN useradd -m -u 1000 appuser
 
@@ -91,6 +88,9 @@ RUN chown -R appuser:appuser /app \
 
 # Switch to non-root user
 USER appuser
+
+# Install Helm diff plugin as appuser
+RUN helm plugin install https://github.com/databus23/helm-diff
 
 # Set up SQLite configuration
 RUN echo ".headers on" > ~/.sqliterc \
