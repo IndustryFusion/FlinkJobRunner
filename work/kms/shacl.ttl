@@ -11,24 +11,13 @@
   rdf:type sh:NodeShape ;
   sh:property [
       rdf:type sh:PropertyShape ;
-      sh:path <https://industry-fusion.org/base/v0.1/operating_hours> ;
+      sh:path <https://industry-fusion.org/base/v0.1/operating_hours222> ;
       sh:maxCount 1 ;
       sh:minCount 1 ;
-      sh:name "https://industry-fusion.org/base/v0.1/operating_hours" ;
-      sh:nodeKind sh:BlankNode ;
-      sh:order "1" ;
-      sh:property [
-          sh:path <https://uri.etsi.org/ngsi-ld/hasValue> ;
-          sh:maxCount 1 ;
-          sh:maxInclusive "500" ;
-          sh:minCount 1 ;
-          sh:minInclusive "100" ;
-          sh:nodeKind sh:Literal ;
-        ] ;
     ] ;
   sh:targetClass schema:airFilter ;
 .
 
-<https://industry-fusion.org/base/v0.1/operating_hours>
+<https://industry-fusion.org/base/v0.1/operating_hours222>
   rdf:type rdf:Property ;
 .

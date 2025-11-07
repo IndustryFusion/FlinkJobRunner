@@ -5,10 +5,6 @@
 @prefix schema: <https://industry-fusion.org/base/v0.1/> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 
-<https://industry-fusion.org/base/v0.1/>
-  rdf:type owl:Ontology ;
-  owl:versionInfo "Created with TopBraid Composer" ;
-.
 :airFilter
   rdf:type rdfs:Class ;
 .

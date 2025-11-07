@@ -182,6 +182,7 @@ def run_tool(job: JobState, target: str, env: dict):
 
         # Run each target sequentially
         for i, current_target in enumerate(targets):
+            time.sleep(10)  # brief pause between steps
             append_log(job, f"Running step {i+1}/{len(targets)}: make {current_target}")
             
             cmd = ["make", current_target]
