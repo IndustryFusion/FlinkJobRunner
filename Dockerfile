@@ -108,7 +108,7 @@ ENV WORK_ROOT=/app/work
 # For Kubernetes pods, kubectl will automatically use the service account
 # Set KUBECONFIG to empty to use in-cluster authentication
 ENV KUBECONFIG=
-ENV ALLOWED_TARGETS=setup,setup-and-deploy,flink-deploy
+ENV ALLOWED_TARGETS=setup,setup-and-deploy,flink-deploy,build,flink-undeploy
 
 # Run the application
 CMD ["python3", "app.py"]

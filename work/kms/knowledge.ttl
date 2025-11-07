@@ -1,24 +1,14 @@
-@prefix : <https://example.org/ontology#> .
+@prefix : <https://industry-fusion.org/base/v0.1/> .
 @prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix schema: <https://industry-fusion.org/base/v0.1/> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 
-: a owl:Ontology .
-
-:Machine a owl:Class .
-
-:Cutter a owl:Class ;
-    rdfs:subClassOf :Machine .
-
-:Workpiece a owl:Class .
-
-:hasWorkpiece a owl:ObjectProperty ;
-    rdfs:domain :Cutter ;
-    rdfs:range :Workpiece .
-
-:state_ON a :MachineState ;
-    rdfs:label "ON" .
-
-:state_OFF a :MachineState ;
-    rdfs:label "OFF" .
-
-:MachineState a owl:Class .
+<https://industry-fusion.org/base/v0.1/>
+  rdf:type owl:Ontology ;
+  owl:versionInfo "Created with TopBraid Composer" ;
+.
+:airFilter
+  rdf:type rdfs:Class ;
+.

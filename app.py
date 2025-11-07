@@ -30,7 +30,7 @@ print(f"WORK_ROOT is set to: {WORK_ROOT}")
 KUBECONFIG_PATH = os.getenv("KUBECONFIG_PATH", "./secrets/kubeconfig")
 
 # Optional: map of allowed make targets to safe values (defense-in-depth)
-ALLOWED_TARGETS = set(os.getenv("ALLOWED_TARGETS", "setup,flink-deploy,deploy,validate,plan,setup-and-deploy").split(","))
+ALLOWED_TARGETS = set(os.getenv("ALLOWED_TARGETS", "setup,flink-deploy,deploy,validate,plan,setup-and-deploy,build,flink-undeploy").split(","))
 
 # Folder (relative to the project root) where files must be placed for the tool
 # e.g., "input" or "config/ttl" — change to match your tool's expectation
@@ -176,7 +176,7 @@ def run_tool(job: JobState, target: str, env: dict):
 
         # Handle sequential targets
         if target == "setup-and-deploy":
-            targets = ["setup", "flink-deploy"]
+            targets = ["setup", "build", "flink-undeploy", "flink-deploy"]
         else:
             targets = [target]
 
