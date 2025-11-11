@@ -128,9 +128,9 @@ enable-strimzi:
 flink-deploy: clean
 
 	@echo deploy helm package
+	sleep 30
 	make helm
 	make disable-strimzi || echo "Can fail"
-	sleep 20
 	# make build || make enable-strimzi
 	kubectl --warnings-as-errors=false -n $(NAMESPACE) delete -f output/ngsild-kafka.yaml --ignore-not-found || make enable-strimzi
 	kubectl --warnings-as-errors=false -n $(NAMESPACE) delete -f output/rdf-kafka.yaml --ignore-not-found || make enable-strimzi
@@ -143,7 +143,7 @@ flink-deploy: clean
 flink-undeploy:
 	@echo undeploy helm package
 	cd ../helm && ./helmfile -f helmfile-shacl.yaml destroy
-	sleep 10
+	sleep 30
 	cd ../helm && ./helmfile -f helmfile-shacl.yaml destroy # undeploy a scnd time to make sure that there are no kafkatopics left
 
 
