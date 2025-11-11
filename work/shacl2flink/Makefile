@@ -145,6 +145,9 @@ flink-undeploy:
 	cd ../helm && ./helmfile -f helmfile-shacl.yaml destroy
 	sleep 30
 	cd ../helm && ./helmfile -f helmfile-shacl.yaml destroy # undeploy a scnd time to make sure that there are no kafkatopics left
+	sleep 20
+	kubectl --warnings-as-errors=false -n $(NAMESPACE) -l "component"="jobmanager" delete pod
+	sleep 20
 
 
 test-flink-is-deployed:

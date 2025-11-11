@@ -17,7 +17,7 @@
           sh:path <https://uri.etsi.org/ngsi-ld/hasValue> ;
           sh:maxCount 1 ;
           sh:minCount 1 ;
-          sh:maxInclusive 250 ;
+          sh:maxInclusive 150 ;
           sh:minInclusive 100 ;
           sh:nodeKind sh:Literal ;
         ] ;
