@@ -131,12 +131,13 @@ flink-deploy: clean
 	sleep 30
 	make helm
 	make disable-strimzi || echo "Can fail"
+	sleep 20
 	# make build || make enable-strimzi
 	kubectl --warnings-as-errors=false -n $(NAMESPACE) delete -f output/ngsild-kafka.yaml --ignore-not-found || make enable-strimzi
 	kubectl --warnings-as-errors=false -n $(NAMESPACE) delete -f output/rdf-kafka.yaml --ignore-not-found || make enable-strimzi
 	cd ../helm && ./helmfile -f helmfile-shacl.yaml apply --skip-diff-on-install || make enable-strimzi
 	make enable-strimzi
-	sleep 45
+	sleep 80
 	kubectl --warnings-as-errors=false -n $(NAMESPACE) -l "app.kubernetes.io/instance"="kafka-connect" delete pod
 
 
@@ -147,7 +148,7 @@ flink-undeploy:
 	cd ../helm && ./helmfile -f helmfile-shacl.yaml destroy # undeploy a scnd time to make sure that there are no kafkatopics left
 	sleep 20
 	kubectl --warnings-as-errors=false -n $(NAMESPACE) -l "component"="jobmanager" delete pod
-	sleep 20
+	sleep 30
 
 
 test-flink-is-deployed:
