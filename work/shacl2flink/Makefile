@@ -135,7 +135,7 @@ flink-deploy: clean
 	kubectl --warnings-as-errors=false -n $(NAMESPACE) delete -f output/rdf-kafka.yaml --ignore-not-found || make enable-strimzi
 	cd ../helm && ./helmfile -f helmfile-shacl.yaml apply --skip-diff-on-install || make enable-strimzi
 	make enable-strimzi
-	sleep 2
+	sleep 20
 	kubectl --warnings-as-errors=false -n $(NAMESPACE) -l "app.kubernetes.io/instance"="kafka-connect" delete pod
 
 
