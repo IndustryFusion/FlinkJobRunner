@@ -130,6 +130,7 @@ flink-deploy: clean
 	@echo deploy helm package
 	make helm
 	make disable-strimzi || echo "Can fail"
+	sleep 20
 	# make build || make enable-strimzi
 	kubectl --warnings-as-errors=false -n $(NAMESPACE) delete -f output/ngsild-kafka.yaml --ignore-not-found || make enable-strimzi
 	kubectl --warnings-as-errors=false -n $(NAMESPACE) delete -f output/rdf-kafka.yaml --ignore-not-found || make enable-strimzi
