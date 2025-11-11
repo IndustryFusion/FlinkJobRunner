@@ -143,7 +143,7 @@ flink-deploy: clean
 flink-undeploy:
 	@echo undeploy helm package
 	cd ../helm && ./helmfile -f helmfile-shacl.yaml destroy
-	sleep 5
+	sleep 10
 	cd ../helm && ./helmfile -f helmfile-shacl.yaml destroy # undeploy a scnd time to make sure that there are no kafkatopics left
 
 
