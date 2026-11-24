@@ -1,4 +1,5 @@
 import os
+import hmac
 import threading
 import uuid
 import time
@@ -9,6 +10,7 @@ import logging
 from pathlib import Path
 from typing import Dict, Optional
 from flask import Flask, request, jsonify, Response, abort
+from urllib.parse import urlsplit
 import requests
 from alerts_shacl import bp as alerts_shacl_bp
 
@@ -30,6 +32,15 @@ print(f"WORK_ROOT is set to: {WORK_ROOT}")
 KUBECONFIG_PATH = os.getenv("KUBECONFIG_PATH", "./secrets/kubeconfig")
 
 # Optional: map of allowed make targets to safe values (defense-in-depth)
+# Shared secret with Factory Manager (it already sends "Authorization: Bearer <RUNNER_TOKEN>").
+# When set, every route except /healthz requires it; when empty the API stays open (old behaviour)
+# and a warning is logged at start-up, so it can be switched on without a code change.
+RUNNER_TOKEN = os.getenv("RUNNER_TOKEN", "")
+
+# Hosts that job input files may be downloaded from (comma-separated, e.g. the object store's host).
+# Empty keeps the old behaviour (any http/https URL) and logs a warning at start-up.
+ALLOWED_DOWNLOAD_HOSTS = {h.strip().lower() for h in os.getenv("ALLOWED_DOWNLOAD_HOSTS", "").split(",") if h.strip()}
+
 ALLOWED_TARGETS = set(os.getenv("ALLOWED_TARGETS", "setup,flink-deploy,deploy,validate,plan,setup-and-deploy,build,flink-undeploy").split(","))
 
 # Folder (relative to the project root) where files must be placed for the tool
@@ -113,8 +124,30 @@ def ensure_dirs(job: JobState):
     # tool_dir now points directly to the existing shacl2flink directory
     # no need to create symlinks since we're using the existing structure
 
+def redact_url(url: str) -> str:
+    """The URL without its query string: pre-signed URLs carry their signature there."""
+    try:
+        parts = urlsplit(url)
+        return f"{parts.scheme}://{parts.netloc}{parts.path}" + ("?<redacted>" if parts.query else "")
+    except ValueError:
+        return "<unparseable url>"
+
+
+def check_download_url(url: str) -> Optional[str]:
+    """Why this URL may not be downloaded, or None when it may."""
+    try:
+        parts = urlsplit(url)
+    except ValueError:
+        return "not a valid URL"
+    if parts.scheme not in ("http", "https"):
+        return "only http and https URLs are allowed"
+    if ALLOWED_DOWNLOAD_HOSTS and (parts.hostname or "").lower() not in ALLOWED_DOWNLOAD_HOSTS:
+        return f"host '{parts.hostname}' is not in ALLOWED_DOWNLOAD_HOSTS"
+    return None
+
+
 def download_to_file(url: str, dest: Path, timeout=120):
-    # Assumes pre-signed URLs or public HTTP(S)
+    # Assumes pre-signed URLs or public HTTP(S); create_job has already checked the URL
     with requests.get(url, stream=True, timeout=timeout) as r:
         r.raise_for_status()
         with open(dest, "wb") as f:
@@ -266,12 +299,18 @@ def create_job():
     context = data.get("context") or {}
     kube_context = context.get("kubeContext")
 
-    logger.info(f"Creating job {job_id} with target '{target}', knowledge_url: {knowledge_url[:50]}..., shacl_url: {shacl_url[:50]}...")
-
     # Validate
     if not knowledge_url or not shacl_url:
         logger.error(f"Job {job_id} validation failed: missing URLs")
         abort(400, "urls.knowledge and urls.shacl are required")
+
+    logger.info(f"Creating job {job_id} with target '{target}', knowledge_url: {redact_url(knowledge_url)}, shacl_url: {redact_url(shacl_url)}")
+
+    for name, url in (("knowledge", knowledge_url), ("shacl", shacl_url)):
+        problem = check_download_url(url)
+        if problem:
+            logger.error(f"Job {job_id} validation failed: urls.{name}: {problem}")
+            abort(400, f"urls.{name}: {problem}")
     if ALLOWED_TARGETS and target not in ALLOWED_TARGETS:
         logger.error(f"Job {job_id} validation failed: target '{target}' not in allowed targets: {ALLOWED_TARGETS}")
         abort(400, f"target '{target}' not allowed")
@@ -294,11 +333,11 @@ def create_job():
         shacl_dest = job.input_dir / "shacl.ttl"
 
         append_log(job, f"Downloading input files to {job.input_dir}...")
-        append_log(job, f"Downloading knowledge.ttl from: {knowledge_url}")
+        append_log(job, f"Downloading knowledge.ttl from: {redact_url(knowledge_url)}")
         download_to_file(knowledge_url, knowledge_dest)
         append_log(job, f"Downloaded knowledge.ttl ({knowledge_dest.stat().st_size} bytes)")
         
-        append_log(job, f"Downloading shacl.ttl from: {shacl_url}")
+        append_log(job, f"Downloading shacl.ttl from: {redact_url(shacl_url)}")
         download_to_file(shacl_url, shacl_dest)
         append_log(job, f"Downloaded shacl.ttl ({shacl_dest.stat().st_size} bytes)")
         
@@ -450,16 +489,28 @@ def cancel_job(job_id: str):
             abort(500, "Failed to cancel")
     return jsonify({"jobId": job_id, "status": job.status})
 
-# Add request logging middleware
+# Liveness for the container HEALTHCHECK and probes; open even when RUNNER_TOKEN is set
+@app.route("/healthz", methods=["GET"])
+def healthz():
+    return jsonify({"status": "ok"})
+
+
+# Request logging and authentication. Headers are never logged: they carry the caller's token.
 @app.before_request
-def log_request_info():
-    logger.info(f"Request: {request.method} {request.path} - Query: {request.query_string.decode()} - Headers: {dict(request.headers)}")
+def log_and_authenticate():
+    logger.info(f"Request: {request.method} {request.path} from {request.remote_addr}")
+    if not RUNNER_TOKEN or request.path == "/healthz":
+        return None
+    scheme, _, token = (request.headers.get("Authorization") or "").partition(" ")
+    if scheme.lower() != "bearer" or not hmac.compare_digest(token.encode(), RUNNER_TOKEN.encode()):
+        logger.warning(f"Rejected {request.method} {request.path} from {request.remote_addr}: missing or wrong token")
+        return jsonify({"error": "unauthorized"}), 401
+    return None
 
 # Catch-all route for debugging unknown requests
 @app.route('/<path:path>', methods=['GET', 'POST', 'PUT', 'DELETE', 'PATCH'])
 def catch_all(path):
-    logger.warning(f"404 - Unknown endpoint: {request.method} /{path} - Query: {request.query_string.decode()}")
-    logger.warning(f"Request headers: {dict(request.headers)}")
+    logger.warning(f"404 - Unknown endpoint: {request.method} /{path}")
     logger.warning(f"Remote addr: {request.remote_addr}")
     return jsonify({"error": "Endpoint not found", "path": f"/{path}", "method": request.method}), 404
 
@@ -470,6 +521,12 @@ if __name__ == "__main__":
     logger.info(f"WORK_ROOT: {WORK_ROOT}")
     logger.info(f"KUBECONFIG_PATH: {KUBECONFIG_PATH}")
     logger.info(f"ALLOWED_TARGETS: {ALLOWED_TARGETS}")
+    if not RUNNER_TOKEN:
+        logger.warning("RUNNER_TOKEN is not set: the API accepts requests without a token. Set it here and in Factory Manager.")
+    if not ALLOWED_DOWNLOAD_HOSTS:
+        logger.warning("ALLOWED_DOWNLOAD_HOSTS is not set: job inputs may be downloaded from any http/https host.")
+    else:
+        logger.info(f"ALLOWED_DOWNLOAD_HOSTS: {sorted(ALLOWED_DOWNLOAD_HOSTS)}")
     
     # Recover existing jobs from disk
     recover_jobs_from_disk()
