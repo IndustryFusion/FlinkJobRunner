@@ -126,9 +126,9 @@ ENV WORK_ROOT=/app/work
 ENV KUBECONFIG=
 ENV ALLOWED_TARGETS=setup,setup-and-deploy,flink-deploy,build,flink-undeploy
 
-# Health: the runner's job list answers as soon as the API is up
+# Health: /healthz answers as soon as the API is up (no token needed)
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-    CMD curl -fsS "http://localhost:${RUNNER_PORT}/jobs" >/dev/null || exit 1
+    CMD curl -fsS "http://localhost:${RUNNER_PORT}/healthz" >/dev/null || exit 1
 
 # Run the application
 CMD ["python3", "app.py"]

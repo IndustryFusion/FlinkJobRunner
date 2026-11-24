@@ -227,3 +227,12 @@ See LICENSE file for details.
 ---
 
 **Built for Industry 4.0 semantic data processing workflows** 🏭✨
+
+## Security settings
+
+| Variable | Effect |
+|---|---|
+| `RUNNER_TOKEN` | When set, every request except `GET /healthz` needs `Authorization: Bearer <RUNNER_TOKEN>`; others get 401. Factory Manager already sends its own `RUNNER_TOKEN`, so set the **same value on both**. When empty, the API stays open and a warning is logged at start-up. |
+| `ALLOWED_DOWNLOAD_HOSTS` | Comma-separated hosts that `POST /jobs` may download `urls.knowledge` / `urls.shacl` from, normally the object store's host. Other hosts get 400. When empty, any http/https host is allowed and a warning is logged. |
+
+Request logs never include headers, and download URLs are logged without their query string (pre-signed URLs carry their signature there).
