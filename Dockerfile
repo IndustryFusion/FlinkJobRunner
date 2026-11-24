@@ -43,7 +43,7 @@ RUN curl -fsSLo kubectl "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/
     && mv kubectl /usr/local/bin/
 
 # Install yq v3 (the version compatible with your Makefile)
-RUN wget -q "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64" -O /usr/local/bin/yq \
+RUN curl -fsSLo /usr/local/bin/yq "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64" \
     && echo "${YQ_SHA256}  /usr/local/bin/yq" | sha256sum -c - \
     && chmod +x /usr/local/bin/yq
 
@@ -91,7 +91,7 @@ RUN mkdir -p secrets \
     && chmod -R 755 work secrets
 
 # Install helmfile in the helm directory
-RUN wget -q "https://github.com/helmfile/helmfile/releases/download/v${HELMFILE_VERSION}/helmfile_${HELMFILE_VERSION}_linux_amd64.tar.gz" -O helmfile.tar.gz \
+RUN curl -fsSLo helmfile.tar.gz "https://github.com/helmfile/helmfile/releases/download/v${HELMFILE_VERSION}/helmfile_${HELMFILE_VERSION}_linux_amd64.tar.gz" \
     && echo "${HELMFILE_SHA256}  helmfile.tar.gz" | sha256sum -c - \
     && tar -xzf helmfile.tar.gz helmfile \
     && chmod +x helmfile \
@@ -125,6 +125,10 @@ ENV WORK_ROOT=/app/work
 # Set KUBECONFIG to empty to use in-cluster authentication
 ENV KUBECONFIG=
 ENV ALLOWED_TARGETS=setup,setup-and-deploy,flink-deploy,build,flink-undeploy
+
+# Health: the runner's job list answers as soon as the API is up
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+    CMD curl -fsS "http://localhost:${RUNNER_PORT}/jobs" >/dev/null || exit 1
 
 # Run the application
 CMD ["python3", "app.py"]
