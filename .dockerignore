@@ -53,3 +53,4 @@ build/
 # Temporary files
 tmp/
 temp/
+.github
