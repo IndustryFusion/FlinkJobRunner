@@ -7,6 +7,7 @@ import queue
 import subprocess
 import shutil
 import logging
+import re
 from pathlib import Path
 from typing import Dict, Optional
 from flask import Flask, request, jsonify, Response, abort
@@ -51,15 +52,38 @@ TOOL_INPUT_SUBDIR = os.getenv("TOOL_INPUT_SUBDIR", "../kms")
 app = Flask(__name__)
 app.register_blueprint(alerts_shacl_bp)
 
+# A job id becomes a directory under WORK_ROOT, so it is limited to what a
+# UUID needs. Factory Manager sends randomUUID().
+JOB_ID_RE = re.compile(r"[A-Za-z0-9_-]{1,128}")
+
+
+def job_dir(job_id: str) -> Optional[Path]:
+    """The job's directory under WORK_ROOT, or None for an id that is not allowed.
+
+    The id comes from the request (body or URL). Without this check an id such as
+    "../x" read and wrote files outside WORK_ROOT.
+    """
+    if not isinstance(job_id, str) or not JOB_ID_RE.fullmatch(job_id):
+        return None
+    root = os.path.realpath(str(WORK_ROOT))
+    path = os.path.realpath(os.path.join(root, job_id))
+    if not path.startswith(root + os.sep):
+        return None
+    return Path(path)
+
+
 class JobState:
     def __init__(self, job_id: str):
+        work_dir = job_dir(job_id)
+        if work_dir is None:
+            raise ValueError(f"invalid job id")
         self.job_id = job_id
         self.status = "QUEUED"       # QUEUED | RUNNING | SUCCEEDED | FAILED
         self.created_at = time.time()
         self.updated_at = self.created_at
         self.proc: Optional[subprocess.Popen] = None
-        self.log_path: Path = WORK_ROOT / job_id / "runner.log"
-        self.work_dir: Path = WORK_ROOT / job_id
+        self.log_path: Path = work_dir / "runner.log"
+        self.work_dir: Path = work_dir
         self.tool_dir: Path = DIGITALTWIN_ROOT  # use the shacl2flink directory directly
         self.input_dir: Path = WORK_ROOT / "kms"  # use the existing kms folder
         self.last_error: Optional[str] = None
@@ -291,7 +315,9 @@ def create_job():
     }
     """
     data = request.get_json(silent=True) or {}
-    job_id = (data.get("jobId") or str(uuid.uuid4())).strip()
+    job_id = str(data.get("jobId") or uuid.uuid4()).strip()
+    if job_dir(job_id) is None:
+        abort(400, "jobId may contain only letters, digits, '-' and '_' (at most 128)")
     target = (data.get("target") or "deploy").strip()
     urls = (data.get("urls") or {})
     knowledge_url = urls.get("knowledge")
@@ -449,7 +475,10 @@ def get_logs(job_id: str):
         all_job_ids = list(JOBS.keys())
     
     # Try to find log file even if job not in memory
-    log_path = WORK_ROOT / job_id / "runner.log"
+    work_dir = job_dir(job_id)
+    if work_dir is None:
+        return Response("Log file not found", mimetype="text/plain", status=404)
+    log_path = work_dir / "runner.log"
     
     if not log_path.exists():
         if job:
@@ -466,7 +495,7 @@ def get_logs(job_id: str):
         return Response(content, mimetype="text/plain")
     except Exception as e:
         logger.error(f"Error reading log file {log_path}: {e}")
-        return Response(f"Error reading log file: {e}", mimetype="text/plain", status=500)
+        return Response("Error reading log file", mimetype="text/plain", status=500)
 
 @app.route("/jobs/<job_id>/cancel", methods=["POST"])
 def cancel_job(job_id: str):
